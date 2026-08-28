@@ -38,6 +38,29 @@ def create_access_token(data: dict) -> str:
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def get_user_from_token(token: str, db: Session) -> models.User | None:
+    """
+    Decodes a JWT and returns the User it belongs to, or None if the
+    token is malformed, expired, or was revoked (token_version mismatch —
+    see /logout). Shared by get_current_user (per-route) and
+    RequireAuthMiddleware (global fail-closed check) so both enforce the
+    exact same rule instead of two copies drifting apart.
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        token_version = payload.get("token_version")
+        if email is None or token_version is None:
+            return None
+    except JWTError:
+        return None
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if user is None or user.token_version != token_version:
+        return None
+    return user
+
+
 def get_current_user(
     token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ) -> models.User:
@@ -51,37 +74,32 @@ def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-
-    user = db.query(models.User).filter(models.User.email == email).first()
+    user = get_user_from_token(token, db)
     if user is None:
         raise credentials_exception
     return user
 
 
-def require_role(*allowed_roles: str):
+def require_role(*allowed_role_ids: int):
     """
     This is the core of RBAC. It's a "dependency factory": calling
-    require_role("admin") returns a function that FastAPI runs before
-    the route. If the logged-in user's role isn't in allowed_roles,
+    require_role(1) returns a function that FastAPI runs before
+    the route. If the logged-in user's role id isn't in allowed_role_ids,
     it blocks the request with a 403 before your route code ever runs.
+
+    Checked by adm_roles.id, not name — a role can be renamed without
+    breaking every route that requires it.
 
     Usage in a route:
         @app.get("/admin-only")
-        def admin_route(user = Depends(require_role("admin"))):
+        def admin_route(user = Depends(require_role(1))):
             ...
     """
     def role_checker(user: models.User = Depends(get_current_user)) -> models.User:
-        if user.role.name not in allowed_roles:
+        if user.id_adm_role not in allowed_role_ids:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Requires one of these roles: {', '.join(allowed_roles)}",
+                detail=f"Requires one of these role ids: {', '.join(str(r) for r in allowed_role_ids)}",
             )
         return user
 

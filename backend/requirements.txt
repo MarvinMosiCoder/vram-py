@@ -6,3 +6,4 @@ passlib
 python-multipart
 bcrypt
 email-validator
+alembic

@@ -53,14 +53,24 @@ pip install fastapi uvicorn sqlalchemy python-jose passlib python-multipart bcry
 
 ## 5. Database models (`backend/app/models/__init__.py`)
 
-Two tables, linked by a foreign key:
+Four tables now:
 
-- **Role** — `id`, `name` ("admin" / "editor" / "viewer")
-- **User** — `id`, `email`, `hashed_password`, `role_id` (points to a Role)
+- **Role** (`adm_roles`) — `id`, `name`, `is_superadmin`, `theme_color`.
+  Only one row is seeded (`Super Administrator`, id `1`) — the model
+  supports more roles, nothing creates them yet.
+- **User** (`adm_users`) — `id`, `email`, `password` (bcrypt hash),
+  `id_adm_role` (FK -> Role), `token_version` (bumped on logout to
+  revoke old tokens).
+- **Modules** (`adm_modules`) — a registerable feature area: `name`,
+  `icon`, `path`, `is_active`, `is_protected` (marks a built-in admin
+  module vs. a future user-generated one — not a permission flag).
+- **Menuses** (`adm_menuses`) — one sidebar entry: `path`, `icon`,
+  `sorting`, `patent_id` (FK -> Modules, its parent), `id_adm_role`
+  (FK -> Role, who can see it).
 
 `relationship()` doesn't create a column — it's a SQLAlchemy
-convenience so `user.role.name` works in Python without you writing a
-manual SQL join.
+convenience so `user.role.name` or `menu.module.is_protected` work in
+Python without you writing a manual SQL join.
 
 **Mental model shift from React:** in React, state lives in memory and
 re-renders drive the UI. Here, the **database is the state** — every
@@ -77,20 +87,32 @@ persists in memory between requests.
   `Authorization: Bearer <token>` header.
 - `get_current_user()` runs on every protected route: decodes the
   token, looks up the matching User row.
-- `require_role("admin")` is the actual RBAC gate — a "dependency
-  factory" that blocks the request with `403 Forbidden` before your
-  route code runs, if the user's role isn't in the allowed list.
+- `require_role(1)` is the actual RBAC gate — a "dependency factory"
+  that blocks the request with `403 Forbidden` before your route code
+  runs, if the user's `id_adm_role` isn't in the allowed list. Roles
+  are checked by **id**, not name, so renaming a role never breaks a
+  route that requires it.
+- `RequireAuthMiddleware` (`backend/app/core/middleware.py`) is a
+  second, global layer: any route *not* explicitly listed as public
+  gets a 401 before it even runs, even if someone forgets to add
+  `Depends(get_current_user)` to a new route. Fail-closed by default.
 
-## 7. API routes (`backend/app/api/routers.py`)
+## 7. API routes (`backend/app/api/`)
 
-| Route | Who can access |
-|---|---|
-| `POST /register` | anyone |
-| `POST /login` | anyone (returns a JWT) |
-| `GET /me` | any logged-in user |
-| `GET /dashboard` | any logged-in user |
-| `GET /editor/content` | role = admin or editor |
-| `GET /admin/users` | role = admin only |
+One file per feature area (`routers.py` just combines them — see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for why it's split this
+way, and [docs/API.md](docs/API.md) for full request/response shapes):
+
+| Route | Who can access | File |
+|---|---|---|
+| `POST /register` | anyone | `auth.py` |
+| `POST /login` | anyone (returns a JWT) | `auth.py` |
+| `POST /logout` | any logged-in user | `auth.py` |
+| `GET /me` | any logged-in user | `auth.py` |
+| `GET /dashboard` | any logged-in user | `dashboard.py` |
+| `GET /sidebar` | any logged-in user (superadmin sees every menu) | `sidebar.py` |
+| `GET /admin/users` | role id `1` only | `admin.py` |
+| `GET /editor/content` | role id `1` only (no separate editor role yet) | `editor.py` |
 
 `CORSMiddleware` is required because browsers block a page on
 `localhost:5173` (React) from calling `localhost:8000` (Python)
@@ -110,9 +132,13 @@ not a Python one.
   frontend (a UX convenience) — the backend's `require_role` is what
   actually enforces it securely, since frontend checks can always be
   bypassed by a determined user.
-- **`Dashboard.jsx`** — reads `user.role` and conditionally renders
+- **`Sidebar.jsx`** — fetches `GET /sidebar` on mount and splits the
+  result into two rendered groups by `module.is_protected` (see
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)'s "Sidebar and menus").
+  No hardcoded link list anymore, except `Dashboard` itself.
+- **`Dashboard.jsx`** — reads `user.role_id` and conditionally renders
   cards, and separately calls `/admin/users`, which the *backend*
-  rejects for non-admins regardless of what the frontend shows.
+  rejects for non-superadmins regardless of what the frontend shows.
 
 ## 9. Running it
 
@@ -131,9 +157,10 @@ npm run dev
 ```
 
 Visit `http://localhost:5173`, log in with `admin@vram.com` / `admin123`.
-Register a second user with role `viewer` via the `/register` endpoint
-(e.g. through the FastAPI docs at `http://localhost:8000/docs`) to see
-the locked cards in action.
+Register a second user via the `/register` endpoint (e.g. through the
+FastAPI docs at `http://localhost:8000/docs`) — it's created with no
+role (`id_adm_role` is `null`), so logging in as them shows the locked
+cards, since none of the role-id checks match.
 
 ## 10. Where to go next
 

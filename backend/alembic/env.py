@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from app.core.database import Base
-from app import models  # noqa: F401 -- must be imported so Base.metadata knows about Role/User
+from app import models  # noqa: F401 -- must be imported so Base.metadata knows about User
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -53,6 +53,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        render_as_batch=True,
     )
 
     with context.begin_transaction():
@@ -74,7 +75,7 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection, target_metadata=target_metadata, render_as_batch=True
         )
 
         with context.begin_transaction():
