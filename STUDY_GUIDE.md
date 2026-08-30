@@ -41,6 +41,12 @@ pip install fastapi uvicorn sqlalchemy python-jose passlib python-multipart bcry
 - **python-jose** — creates/verifies JWT login tokens
 - **passlib + bcrypt** — securely hash passwords (never store plain text)
 - **python-multipart** — lets FastAPI parse login form data
+- **alembic** — versioned schema migrations (see [docs/MIGRATIONS.md](docs/MIGRATIONS.md))
+- **psycopg2-binary** — the PostgreSQL driver. SQLAlchemy is the ORM, but
+  it still needs a driver underneath to speak Postgres's wire protocol.
+
+The authoritative list is `backend/requirements.txt` —
+`pip install -r requirements.txt` installs all of it in one go.
 
 ## 4. Python syntax notes for someone coming from JS/React
 
@@ -51,9 +57,11 @@ pip install fastapi uvicorn sqlalchemy python-jose passlib python-multipart bcry
   "special" attributes frameworks look for — not something you invent.
 - Python variables: just `name = value` — no `const`/`let`/`var`.
 
-## 5. Database models (`backend/app/models/__init__.py`)
+## 5. Database models (`backend/app/models/`)
 
-Four tables now:
+One file per table, all re-exported from `models/__init__.py` so routes
+still just write `models.User`. Five tables now, in a PostgreSQL database
+called `vram_admin` ([docs/DATABASE.md](docs/DATABASE.md) sets it up):
 
 - **Role** (`adm_roles`) — `id`, `name`, `is_superadmin`, `theme_color`.
   Only one row is seeded (`Super Administrator`, id `1`) — the model
@@ -65,17 +73,59 @@ Four tables now:
   `icon`, `path`, `is_active`, `is_protected` (marks a built-in admin
   module vs. a future user-generated one — not a permission flag).
 - **Menuses** (`adm_menuses`) — one sidebar entry: `path`, `icon`,
-  `sorting`, `patent_id` (FK -> Modules, its parent), `id_adm_role`
-  (FK -> Role, who can see it).
+  `sorting`, `parent_id` (FK -> **Menuses**, the accordion group it sits
+  under; `NULL` = top level), `id_adm_role` (FK -> Role, who can see it).
+- **AdminMenuses** (`adm_admin_menuses`) — the admin sidebar, added
+  2026-08-30: `name`, `type`, `path`, `slug`, `color`, `icon`,
+  `parent_id`, `is_active`, `sorting`. Same idea as Menuses but with no
+  foreign keys and no role column. This is the one `GET /admin_sidebar`
+  actually reads.
 
 `relationship()` doesn't create a column — it's a SQLAlchemy
-convenience so `user.role.name` or `menu.module.is_protected` work in
-Python without you writing a manual SQL join.
+convenience so `user.role.name` works in Python without you writing a
+manual SQL join. `Role` <-> `User` is the only pair using it; the
+Modules <-> Menuses pair was dropped when a menu's parent became another
+menu instead of a module.
+
+**A self-referencing foreign key** is worth a second look:
+`parent_id = Column(Integer, ForeignKey("adm_menuses.id"))` points a
+table at *itself*. That is how you store a tree in a flat table — each
+row names its parent, and the roots are the rows where the column is
+`NULL`. It replaced a column that pointed at a different table entirely,
+which is why migration `253f97ec1dfd` clears the old values instead of
+keeping them (see [docs/MIGRATIONS.md](docs/MIGRATIONS.md#this-projects-migration-history)).
 
 **Mental model shift from React:** in React, state lives in memory and
 re-renders drive the UI. Here, the **database is the state** — every
 request opens a session, reads/writes rows, and closes it. Nothing
 persists in memory between requests.
+
+### From SQLite to PostgreSQL
+
+The project started on SQLite (a single `app.db` file) and now runs on a
+PostgreSQL server. What actually changed, nearly all of it in
+`backend/app/core/database.py`:
+
+- **The URL.** `sqlite:///./app.db` became
+  `postgresql+psycopg2://vram:vram@localhost:5432/vram_admin` —
+  `user:password@host:port/database`. The `+psycopg2` part names the
+  driver, which is why `psycopg2-binary` is in `requirements.txt`.
+- **Connection pooling starts mattering.** `pool_pre_ping=True` and
+  `pool_recycle=3600` replaced SQLite's `check_same_thread` argument. A
+  file cannot hang up on you; a database *server* can (idle timeout,
+  restart), so the pool tests a connection before reusing it and retires
+  any older than an hour.
+- **Foreign keys are enforced for free.** SQLite ignored FK constraints
+  unless `PRAGMA foreign_keys=ON` ran on every new connection, so there
+  was an event listener doing exactly that. It is gone — Postgres
+  enforces them itself.
+- **No more `create_all()` at startup.** `main.py` used to build missing
+  tables on every boot; it does not now, so a fresh database needs
+  `alembic upgrade head` before the app can serve a request.
+- **One connection string, not two.** `alembic.ini` no longer holds a
+  `sqlalchemy.url`; `alembic/env.py` imports `DATABASE_URL` from
+  `database.py` and sets it at runtime, so the app and its migrations
+  cannot drift onto different databases.
 
 ## 6. Auth & RBAC (`backend/app/core/auth.py`)
 
@@ -110,7 +160,7 @@ way, and [docs/API.md](docs/API.md) for full request/response shapes):
 | `POST /logout` | any logged-in user | `auth.py` |
 | `GET /me` | any logged-in user | `auth.py` |
 | `GET /dashboard` | any logged-in user | `dashboard.py` |
-| `GET /sidebar` | any logged-in user (superadmin sees every menu) | `sidebar.py` |
+| `GET /admin_sidebar` | any logged-in user (no role filter yet) | `sidebar.py` |
 | `GET /admin/users` | role id `1` only | `admin.py` |
 | `GET /editor/content` | role id `1` only (no separate editor role yet) | `editor.py` |
 
@@ -132,10 +182,12 @@ not a Python one.
   frontend (a UX convenience) — the backend's `require_role` is what
   actually enforces it securely, since frontend checks can always be
   bypassed by a determined user.
-- **`Sidebar.jsx`** — fetches `GET /sidebar` on mount and splits the
-  result into two rendered groups by `module.is_protected` (see
+- **`Sidebar.jsx`** — fetches `GET /admin_sidebar` on mount and renders
+  every row it gets back under the "Admin" heading (see
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)'s "Sidebar and menus").
-  No hardcoded link list anymore, except `Dashboard` itself.
+  No hardcoded link list anymore, except `Dashboard` itself. The
+  `userMenus` group is still in the component but hardcoded empty, left
+  for when non-admin menus get their own source.
 - **`Dashboard.jsx`** — reads `user.role_id` and conditionally renders
   cards, and separately calls `/admin/users`, which the *backend*
   rejects for non-superadmins regardless of what the frontend shows.
@@ -143,10 +195,11 @@ not a Python one.
 ## 9. Running it
 
 ```bash
-# Backend
+# Backend  (PostgreSQL must already be running — see below)
 cd backend
 venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+alembic upgrade head    # creates every table; nothing does this at startup
 python seed.py          # creates roles + admin@vram.com / admin123
 uvicorn app.main:app --reload
 
@@ -155,6 +208,13 @@ cd frontend
 npm install
 npm run dev
 ```
+
+The database itself is not created for you: you need a PostgreSQL server
+with a `vram_admin` database and a `vram` login before any of the backend
+commands work — [docs/DATABASE.md](docs/DATABASE.md) walks through it
+start to finish. A `connection refused` or
+`database "vram_admin" does not exist` error means that setup was
+skipped, not that the Python is wrong.
 
 Visit `http://localhost:5173`, log in with `admin@vram.com` / `admin123`.
 Register a second user via the `/register` endpoint (e.g. through the
@@ -167,4 +227,6 @@ cards, since none of the role-id checks match.
 - Add a "create user" form in the frontend (admin-only) that calls `POST /register`.
 - Add refresh tokens (current JWT expires after 60 minutes, hardcoded in `auth.py`).
 - Move `SECRET_KEY` out of the code and into an environment variable.
-- Swap SQLite for PostgreSQL by changing one line in `database.py`.
+- Move `DATABASE_URL` out of `database.py` as well — the Postgres
+  password is sitting in source in plain text, and `alembic/env.py`
+  imports it from there, so it is a one-place change.

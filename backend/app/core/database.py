@@ -1,27 +1,17 @@
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# SQLite database file — will be created automatically as app.db
-DATABASE_URL = "sqlite:///./app.db"
+DATABASE_URL = "postgresql+psycopg2://vram:vram@localhost:5432/vram_admin"
 
 engine = create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=3600,
 )
-
-
-@event.listens_for(engine, "connect")
-def _enable_sqlite_foreign_keys(dbapi_connection, connection_record):
-    # SQLite ignores FK constraints unless this is set per-connection —
-    # without it, a bad id_adm_role would insert silently instead of erroring.
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
-
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
-
 
 def get_db():
     """

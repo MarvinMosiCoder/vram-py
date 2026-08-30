@@ -12,13 +12,14 @@ from pathlib import Path
 # backend/ folder (where the app/ package lives) needs to be added to
 # the import path manually.
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-
-from app.core.database import Base
-from app import models  # noqa: F401 -- must be imported so Base.metadata knows about User
-
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+from app.core.database import Base, DATABASE_URL
+config.set_main_option("sqlalchemy.url", DATABASE_URL)
+from app import models  # noqa: F401 -- must be imported so Base.metadata knows about User
+
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

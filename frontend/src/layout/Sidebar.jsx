@@ -6,11 +6,11 @@ export default function Sidebar() {
   const [menus, setMenus] = useState([]);
 
   useEffect(() => {
-    api.get("/sidebar").then((res) => setMenus(res.data)).catch(() => {});
+    api.get("/admin_sidebar").then((res) => setMenus(res.data)).catch(() => {});
   }, []);
 
-  const adminMenus = menus.filter((m) => m.module?.is_protected === 1);
-  const userMenus = menus.filter((m) => m.module?.is_protected !== 1);
+  const adminMenus = menus;
+  const userMenus = [];
   console.log("adminMenus", adminMenus);
   const renderLinks = (items) =>
     items.map((m) => (

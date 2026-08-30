@@ -13,7 +13,7 @@ Routes are documented per feature area under [api/](api/), mirroring how
 |---|---|---|---|
 | Auth | `POST /register`, `POST /login`, `POST /logout`, `GET /me` | [api/auth.md](api/auth.md) | `api/auth.py` |
 | Dashboard | `GET /dashboard` | [api/dashboard.md](api/dashboard.md) | `api/dashboard.py` |
-| Sidebar | `GET /sidebar` | [api/sidebar.md](api/sidebar.md) | `api/sidebar.py` |
+| Sidebar | `GET /admin_sidebar` | [api/sidebar.md](api/sidebar.md) | `api/sidebar.py` |
 | Admin | `GET /admin/users` | [api/admin.md](api/admin.md) | `api/admin.py` |
 | Editor | `GET /editor/content` | [api/editor.md](api/editor.md) | `api/editor.py` |
 
@@ -66,6 +66,6 @@ Roles are identified by `adm_roles.id`, not by name — see
 | POST | `/logout` | any logged-in user | [api/auth.md](api/auth.md) |
 | GET | `/me` | any logged-in user | [api/auth.md](api/auth.md) |
 | GET | `/dashboard` | any logged-in user | [api/dashboard.md](api/dashboard.md) |
-| GET | `/sidebar` | any logged-in user (superadmin sees all) | [api/sidebar.md](api/sidebar.md) |
+| GET | `/admin_sidebar` | any logged-in user | [api/sidebar.md](api/sidebar.md) |
 | GET | `/admin/users` | role id `1` | [api/admin.md](api/admin.md) |
 | GET | `/editor/content` | role id `1` | [api/editor.md](api/editor.md) |

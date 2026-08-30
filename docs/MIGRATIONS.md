@@ -1,10 +1,28 @@
 # Database Migrations (Alembic)
 
+## Before you start
+
+The database is PostgreSQL, not a file — the server has to be running and
+`vram_admin` has to exist before any `alembic` command can connect. If
+you have not done that yet, start with [DATABASE.md](DATABASE.md).
+
+Alembic reads the connection string from `backend/app/core/database.py`
+(through `alembic/env.py`), **not** from `alembic.ini` — that file has no
+`sqlalchemy.url` line at all any more.
+
 ## Steps to run a migration
 
-1. Add or change a model in `backend/app/models/__init__.py` (new class =
-   new table, new `Column(...)` = new column, etc.). Save the file.
-2. Make sure the app (`uvicorn`) is **not** running.
+1. Add or change a model in `backend/app/models/` — one file per table
+   (`role.py`, `user.py`, `module.py`, `menus.py`, `admin_menus.py`). A
+   new `Column(...)` in an
+   existing file needs nothing else; a **new table** means a new file *and* a
+   re-export line in `backend/app/models/__init__.py`, or alembic won't see
+   it (see [How it's wired up](#how-its-wired-up)). Save the file.
+2. Do not run `python seed.py` yet — it still calls
+   `Base.metadata.create_all()`, which would create your new table before
+   alembic gets a chance to generate a migration for it. (Leaving
+   `uvicorn` running is fine now that `main.py` no longer creates tables,
+   though a schema change under a live app is still worth avoiding.)
 3. Open a terminal in `backend/`.
 4. Run:
    ```bash
@@ -18,27 +36,36 @@
    ```bash
    alembic upgrade head
    ```
-7. Done. Start `uvicorn` again.
+7. Done — the schema is updated. Start `uvicorn` (or `python seed.py`)
+   again whenever you like.
 
 ## If the migration file is empty
 
-This means the table/column already exists in `backend/app.db` — usually
-because the app was started (step 2 was skipped) and
+This means the table/column already exists in `vram_admin` — usually
+because `python seed.py` was run first (step 2 was skipped) and its
 `Base.metadata.create_all()` created it before you ran `alembic revision`.
 
 1. Delete the file alembic just generated (the empty one).
 2. Find the table your model change added, and drop it:
    ```bash
+   psql -h localhost -U vram -d vram_admin -c "DROP TABLE your_table_name;"
+   ```
+   No `psql` on your PATH? Do it through the app's own connection instead:
+   ```bash
    cd backend
-   python -c "import sqlite3; c=sqlite3.connect('app.db'); c.execute('DROP TABLE your_table_name'); c.commit()"
+   python -c "from sqlalchemy import text; from app.core.database import engine; c = engine.connect(); c.execute(text('DROP TABLE your_table_name')); c.commit()"
    ```
 3. Go back to step 3 of [Steps to run a migration](#steps-to-run-a-migration).
 
 Not sure if your table is one of the auto-created ones? List every table in
 the database and compare against what you expect:
 ```bash
+psql -h localhost -U vram -d vram_admin -c "\dt"
+```
+or, again without `psql`:
+```bash
 cd backend
-python -c "import sqlite3; print(sqlite3.connect('app.db').cursor().execute(\"SELECT name FROM sqlite_master WHERE type='table'\").fetchall())"
+python -c "from sqlalchemy import inspect; from app.core.database import engine; print(inspect(engine).get_table_names())"
 ```
 
 ---
@@ -57,26 +84,33 @@ applies whichever ones a given database is missing, in order.
 
 ### Why not just `Base.metadata.create_all()`?
 
-`backend/app/main.py` calls `Base.metadata.create_all(bind=engine)` on every
-startup — a SQLAlchemy convenience that creates any table that doesn't exist
-yet, straight from the current models. It's fine for a brand-new empty
-database, but it can't:
+`Base.metadata.create_all(bind=engine)` is a SQLAlchemy convenience that
+creates any table that doesn't exist yet, straight from the current
+models. It's fine for a brand-new empty database, but it can't:
 
 - **Change an existing table** (add a column, rename one, add an index) —
   it only creates missing tables, never alters existing ones.
 - **Give you a history** — a reviewable, ordered record of every schema
   change that can be replayed on a teammate's machine or a server.
 
-This is also *why* the empty-migration problem above happens at all —
-`create_all()` runs on every app startup and quietly beats Alembic to
-creating any new table.
+`backend/app/main.py` used to call it on every startup. That call was
+removed with the move to PostgreSQL, so **migrations are now the only
+thing that creates or changes the schema** — which is also why a fresh
+database needs an explicit `alembic upgrade head` before the app can
+serve a request.
+
+`backend/seed.py` still calls `create_all()`, so the seed script works
+against a completely empty database. That is the one remaining way to hit
+the empty-migration problem above: run `seed.py` after adding a model but
+before generating its migration, and `create_all()` beats alembic to
+creating the table.
 
 ### How it's wired up
 
 | File | Role |
 |---|---|
-| `backend/alembic.ini` | Alembic's config. `sqlalchemy.url` points at the same `sqlite:///./app.db` used by `database.py`. |
-| `backend/alembic/env.py` | Runs on every alembic command. Adds `backend/` to `sys.path`, imports `app.core.database.Base` and `app.models`, and sets `target_metadata = Base.metadata` — this is what lets `--autogenerate` diff your models against the live database. |
+| `backend/alembic.ini` | Alembic's config. The `sqlalchemy.url` line was **deleted** — the URL now comes from `env.py` at runtime, so there is no second connection string to keep in sync with `database.py`. |
+| `backend/alembic/env.py` | Runs on every alembic command. Adds `backend/` to `sys.path`; imports `Base` **and `DATABASE_URL`** from `app.core.database` and calls `config.set_main_option("sqlalchemy.url", DATABASE_URL)`, which fills in the URL `alembic.ini` no longer has; imports `app.models`; sets `target_metadata = Base.metadata`, which is what lets `--autogenerate` diff your models against the live database. It imports the models *package*, so a model file missing from `app/models/__init__.py` never reaches `Base.metadata` and is silently ignored. (Those imports sit *below* `config = context.config` on purpose — `set_main_option` needs that object to exist first.) |
 | `backend/alembic/versions/*.py` | One file per migration, oldest to newest, linked by `revision` / `down_revision`. |
 
 ### Autogenerate isn't magic — always review the file
@@ -121,6 +155,8 @@ flowchart TD
     AR --> FK["dc5e59e6b124<br/>add id_adm_role fk to adm_users"]
     FK --> TV["15ec4b269023<br/>add token_version to adm_users"]
     TV --> MM["cdf659bd13b9<br/>create adm_modules + adm_menuses"]
+    MM --> PI["253f97ec1dfd<br/>adm_menuses.patent_id → parent_id<br/>(self-FK, hand-written)"]
+    PI --> AM["4a53b9d60757<br/>create adm_admin_menuses"]
 ```
 
 1. **`8bbdefcb8b73_create_roles_table.py`** — creates `roles` (`id`, `name`).
@@ -145,6 +181,39 @@ flowchart TD
 7. **`cdf659bd13b9_create_adm_modules_and_adm_menuses_.py`** — creates
    `adm_modules` and `adm_menuses` (`adm_menuses.patent_id` FK →
    `adm_modules.id`, `adm_menuses.id_adm_role` FK → `adm_roles.id`).
+8. **`253f97ec1dfd_menus_parent_id_self_reference_drop_.py`** — renames
+   `adm_menuses.patent_id` to `parent_id` and re-points the FK from
+   `adm_modules.id` to `adm_menuses.id`, so a menu's parent is another
+   menu (an accordion group) rather than a module. **Hand-written, not
+   autogenerated** — this is exactly the rename case from
+   [Autogenerate isn't magic](#autogenerate-isnt-magic--always-review-the-file):
+   the raw output was "drop `patent_id`, add `parent_id`", which throws
+   the column's data away, so it was rewritten as a single
+   `op.alter_column(..., new_column_name=...)`. The old values were ids
+   into a *different* table, so they are meaningless under the new
+   constraint (and any of them without a matching menu id would fail it);
+   the migration clears them with `UPDATE adm_menuses SET parent_id =
+   NULL` before adding the FK. `downgrade()` reverses all three steps,
+   clearing the column again on the way back.
+9. **`4a53b9d60757_create_adm_admin_menuses.py`** — creates
+   `adm_admin_menuses` (`id`, `name`, `type`, `path`, `slug`, `color`,
+   `icon`, `parent_id`, `is_active`, `sorting`, `created_at`,
+   `updated_at`). No foreign keys: `parent_id` self-references by
+   convention only. This is the table `GET /admin_sidebar` reads — see
+   [ARCHITECTURE.md](ARCHITECTURE.md#sidebar-and-menus).
 
-Run `alembic history` any time to see the current chain, or `alembic current`
-to see where `app.db` is stamped.
+The first seven were written while the project was still on SQLite and
+replayed onto PostgreSQL with a single `alembic upgrade head` — no
+rewrite needed. 8 and 9 were written against PostgreSQL directly, which
+is why 8 can name a constraint (`adm_menuses_patent_id_fkey`) outright:
+that is Postgres's own naming convention, and SQLite would never have
+had a constraint to drop by name in the first place.
+
+The `with op.batch_alter_table(...)` blocks in some of the first seven
+are a SQLite artifact (`render_as_batch=True` in `env.py`): SQLite cannot
+`ALTER TABLE`, so alembic copies the table instead. On PostgreSQL those
+same blocks emit ordinary `ALTER TABLE`s, so they are harmless — the
+setting can be dropped from `env.py` whenever SQLite stops mattering.
+
+Run `alembic history` any time to see the current chain, or
+`alembic current` to see which revision `vram_admin` is stamped at.
