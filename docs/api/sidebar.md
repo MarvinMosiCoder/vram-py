@@ -14,7 +14,12 @@ section for how the menu tables fit together.
 Returns the admin sidebar entries, for building the sidebar dynamically.
 Reads `adm_admin_menuses` — a flat list, no nested module object.
 
-**Auth:** any authenticated user.
+**Auth:** any authenticated user — but note *how*. The route signature is
+`sidebar(db: Session = Depends(get_db))` with **no auth dependency at
+all**, so `RequireAuthMiddleware` is the only thing checking the token
+here. That is the fail-closed backstop working as designed, and it also
+means the route body has no `User` object to read: adding per-user or
+per-role behaviour means adding `Depends(auth.get_current_user)` first.
 
 **Response** `200 OK`
 

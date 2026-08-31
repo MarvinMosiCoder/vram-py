@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import api from "../api";
 
-export default function Sidebar() {
+export default function AppSidebar() {
   const [menus, setMenus] = useState([]);
 
   useEffect(() => {
@@ -16,7 +16,7 @@ export default function Sidebar() {
     items.map((m) => (
       <NavLink
         key={m.id}
-        to={m.path}
+        to={`/${m.slug}`}
         className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
       >
         {m.name}

@@ -209,6 +209,6 @@ Two things to know first:
 
 - The password sits in source, in plain text, and gets committed. Moving
   `DATABASE_URL` into an environment variable is the first hardening step
-  in `STUDY_GUIDE.md` §10, and it's now a one-place change.
+  in `STUDY_GUIDE.md` §11, and it's now a one-place change.
 - A brand-new target database still needs steps 2, 4 and 5 — role and
   database, `alembic upgrade head`, `seed.py` — before it serves anything.

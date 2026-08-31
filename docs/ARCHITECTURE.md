@@ -21,6 +21,18 @@ flowchart LR
     BE -- SQLAlchemy ORM --> DB
 ```
 
+## Coming from Laravel
+
+This project is a port of a Laravel + Inertia admin template of the same
+name, and several files say so in their own comments. The single
+difference that explains most of the others: Laravel is one process that
+renders a page and its props together and authenticates with a session
+cookie, while this is two servers exchanging JSON with a bearer JWT — so
+there are no shared props, no CSRF token, and CORS has to be configured
+explicitly. [LARAVEL.md](LARAVEL.md) maps the whole stack concept by
+concept, and [MODULES.md](MODULES.md) covers the port of
+`GeneratedModuleController.php`, which is the largest single piece.
+
 ## Directory layout
 
 ```
@@ -46,6 +58,12 @@ backend/
       menus.py           MenuOut
       admin_menus.py     AdminMenu
       __init__.py        re-exports all of the above
+    modules/           the dynamic module system (see "Dynamic modules")
+      registry.py        CONTROLLERS dict + the @controller / @action decorators
+      base.py            ModuleController — the shared, inherited CRUD surface
+      roles_module.py    RolesController -> adm_roles (metadata only, no code)
+      users_module.py    UsersController — a reachability demo, not a real module
+      __init__.py        imports every module file; the import IS the registration
     api/
       routers.py       combines every feature router below — the only
                         file main.py imports; adding a new feature area
@@ -53,24 +71,54 @@ backend/
       serializers.py   User -> UserOut, shared by auth.py and admin.py
       auth.py          /register, /login, /logout, /me
       dashboard.py     /dashboard
-      sidebar.py       /sidebar
+      sidebar.py       /admin_sidebar
       admin.py         /admin/users
       editor.py        /editor/content
+      dynamic.py       the three catch-all module routes — MUST be the last
+                        router included, see "Dynamic modules" below
   alembic/             migration environment + versions/ (see MIGRATIONS.md)
   alembic.ini          alembic config — deliberately has no sqlalchemy.url;
                         env.py injects it from core/database.py
   seed.py              one-off script: creates the Super Administrator role + admin@vram.com
 
 frontend/
+  vite.config.js           React plugin + the Tailwind v4 plugin
   src/
+    index.css              the whole stylesheet: Tailwind import, @theme
+                            tokens, role palettes, then semantic classes
     api.js                 shared axios instance + auth-header interceptor
     context/AuthContext.jsx  global auth state (user, login, logout)
-    components/ProtectedRoute.jsx  route guard (auth + role check)
-    layout/Sidebar.jsx      fetches GET /admin_sidebar, renders it under "Admin"
-    layout/Navbar.jsx
-    layout/Layout.jsx
+    context/NavbarContext.jsx  scaffolding — a title state whose effect is
+                                commented out; nothing provides or reads it yet
+    context/ThemeContext.jsx   applies the signed-in user's role theme to
+                                <html>; also carries a profile context
+    config/themeOptions.js     resolves adm_roles.theme_color to a palette
+                                (skin name or raw hex) — see "Styling" below
+    components/         grouped by category; folders lowercase, files PascalCase
+      auth/ProtectedRoute.jsx    route guard (auth + role check)
+      button/                    PrimaryButton, SecondaryButton, DangerButton
+      form/                      InputLabel, TextInput, Checkbox, SelectInput,
+                                  InputError
+      panel/                     TopPanel (page header strip), ContentPanel
+                                  (the card), Toast
+      toast/DissapearingToast.jsx  rendered once by ToastProvider
+      sidebar/AdminSidebar.jsx   empty file, placeholder only
+      table/                     Table, TableHead, TableBody, TableRow,
+                                  HeadData (<th>), RowData (<td>),
+                                  RowActions (cluster), RowAction (icon button)
+    layout/Layout.jsx       the shell: AppNavbar / AppSidebar / AppContent / AppFooter
+    layout/AppNavbar.jsx    full-width top bar
+    layout/AppSidebar.jsx   fetches GET /admin_sidebar, renders it under "Admin"
+    layout/AppContent.jsx   breadcrumbs + the scrolling region + ToastProvider
+    layout/AppFooter.jsx    copyright strip
     pages/Login.jsx
     pages/Dashboard.jsx
+    pages/ModuleRoute.jsx   sits behind "/:modulePath", picks the page component
+    pages/modulePages.js    adm_modules.path -> a custom page component
+    pages/admvram/RolesPage.jsx            the Roles module's wrapper page
+    pages/admvram/vramjsx/GeneratedModulePage.jsx
+                            the shared module runtime — renders whatever
+                             metadata render_index() sends; not per-module
     App.jsx        route table
     main.jsx       React entry point
 ```
@@ -96,11 +144,47 @@ api/<feature>.py (route, e.g. api/sidebar.py)
   -> schemas validates the response shape before it's sent [schemas/]
 ```
 
+A request whose path matches no static route takes one extra hop instead
+of 404ing, because the last router mounted is a catch-all:
+
+```
+core/middleware.py (RequireAuthMiddleware)      — same as above
+api/dynamic.py (module_index / module_action / module_action_args)
+  -> Depends(auth.get_current_user) + Depends(database.get_db)  — same as above
+  -> MODULE_PATH_RE guards the path shape
+  -> adm_modules row (path, is_active=1) -> its `controller` string
+  -> CONTROLLERS[...] -> a ModuleController subclass  [modules/registry.py]
+  -> getattr(instance, "get_index") if marked @action  [modules/base.py]
+  -> SQLAlchemy Core select() against Base.metadata.tables[table_name]
+  -> render_index() returns a plain dict — no Pydantic schema here
+```
+
+Two things are different on this path. There is no `response_model`: the
+shape is whatever `render_index()` builds, because the columns are not
+known until runtime. And the query is written in SQLAlchemy's 2.0
+`select()` style rather than the `db.query(...)` style the static routes
+use — both work against the same session, they are simply two eras of the
+same library.
+
+**`dynamic.router` must be the last router included in `routers.py`.**
+`"/{module_path}"` matches any single-segment path, and Starlette
+resolves first-match-wins in declaration order, so anything included
+below it would be shadowed — `/dashboard` would be looked up as a module
+named `dashboard`. The frontend has the same catch-all but the opposite
+rule: React Router v6 ranks by specificity, so `"/dashboard"` beats
+`"/:modulePath"` in `App.jsx` regardless of order.
+
 `RequireAuthMiddleware` and each route's `Depends(auth.get_current_user)`
 both call the same `auth.get_user_from_token()` — the middleware is a
 fail-closed backstop (a route added without an explicit `Depends` is
 still protected), the per-route dependency is what actually hands the
 `User` object to the route body.
+
+`GET /admin_sidebar` is the case that proves the backstop earns its keep:
+`api/sidebar.py` takes only `Depends(get_db)` and no auth dependency at
+all, so the middleware is the *only* thing authenticating it. It works,
+and it is worth knowing about — the route body has no `User` to read, so
+per-user or per-role behaviour there needs the dependency added first.
 
 There is no in-memory application state between requests — the database
 is the single source of truth. `get_db()` opens a session per request
@@ -244,9 +328,17 @@ Role checks happen in **two places**, deliberately:
 | `POST /logout` | any authenticated user | `get_current_user` |
 | `GET /me` | any authenticated user | `get_current_user` |
 | `GET /dashboard` | any authenticated user | `get_current_user` |
-| `GET /admin_sidebar` | any authenticated user — no role filter, see [api/sidebar.md](api/sidebar.md) | `get_current_user` |
+| `GET /admin_sidebar` | any authenticated user — no role filter, see [api/sidebar.md](api/sidebar.md) | `RequireAuthMiddleware` **only** |
 | `GET /admin/users` | role id `1` | `require_role(1)` |
 | `GET /editor/content` | role id `1` (temporary — no editor role exists yet) | `require_role(1)` |
+| `GET\|POST /{module_path}[/{action}[/…]]` | any authenticated user — **no role filter**, see [MODULES.md](MODULES.md) | `get_current_user` |
+
+The last row is the widest hole in the table and worth stating plainly:
+every dynamic module route is reachable by any logged-in user. A module's
+`actions` flags decide whether create/edit/delete *exist*, not who may
+call them, and `require()` in `modules/base.py` says as much in its own
+docstring. Closing it means either `Depends(auth.require_role(...))` on
+the dynamic router or a role consulted inside `require()`.
 
 See [API.md](API.md) for full request/response details on each route.
 
@@ -261,7 +353,8 @@ actually stands rather than where it is heading.
   `is_protected` does **not** mean "requires a role" — it marks a
   built-in admin module (Users Management, Menu Management, etc.) as
   opposed to a future user-generated one. Nothing joins to it any more
-  (see below) and no route reads it.
+  (see below), but it is no longer unread: `api/dynamic.py` resolves
+  every module request against it — see "Dynamic modules" below.
 - **`adm_menuses`** — one sidebar entry: `name`, `type`, `path`, `slug`,
   `icon`, `color`, `sorting`, `is_dashboard`, `parent_id` (FK ->
   **`adm_menuses.id`**), and `id_adm_role` (FK -> `adm_roles.id`, who
@@ -269,8 +362,11 @@ actually stands rather than where it is heading.
 - **`adm_admin_menuses`** — the table behind the admin sidebar, added
   2026-08-30. Same shape as `adm_menuses` minus `is_dashboard`,
   `id_adm_role`, and any foreign key: `name`, `type`, `path`, `slug`,
-  `color`, `icon`, `parent_id`, `is_active`, `sorting`. Seeded with one
-  row (`Roles`).
+  `color`, `icon`, `parent_id`, `is_active`, `sorting`. Holds one row
+  (`Roles`) — inserted by hand, not by `seed.py`, which creates only the
+  Super Administrator role and the admin login. Neither this table nor
+  `adm_modules` is seeded by any script or migration, so a freshly
+  migrated database has an empty sidebar and no modules.
 
 **A menu's parent is another menu, not a module.** `adm_menuses` used to
 carry `patent_id`, a typo'd FK into `adm_modules.id`. Migration
@@ -295,6 +391,55 @@ returned but not yet used to nest anything. `Dashboard` is a separate
 hardcoded link with no row in any table, since every signed-in user
 always sees it.
 
+## Dynamic modules
+
+The newest and largest piece of the project, and the one that changes how
+you add a feature. A row in `adm_modules` names a controller class; that
+class declares its columns as metadata; and a searchable, sortable,
+paginated `GET /<path>` exists with no new route, no Pydantic schema, and
+no React file. `adm_roles` is served this way today, through
+`RolesController`, which is forty lines of pure declaration.
+
+```mermaid
+flowchart LR
+    R[("adm_modules row<br/>path · table_name · controller")] --> D["api/dynamic.py<br/>3 catch-all routes"]
+    D --> C{"CONTROLLERS<br/>registry.py"}
+    C --> M["ModuleController subclass<br/>modules/base.py"]
+    M --> T[("Base.metadata.tables<br/>[table_name]")]
+    M --> P["render_index() props"]
+    P --> G["GeneratedModulePage.jsx<br/>shared React runtime"]
+    G -.->|"custom page, optional"| W["modulePages.js -> RolesPage.jsx"]
+```
+
+The design splits *what exists* from *what is possible*. The database
+half is admin-editable: turn a module off, rename it, change its icon,
+reorder it. The code half is not: a `@controller("...")` registration is
+the only way a controller string resolves to a class, and
+`Base.metadata.tables[...]` is the only way a `table_name` resolves to a
+table. So an admin can manage modules without being able to introduce
+behaviour or reach a table nobody declared.
+
+Seven allowlists sit on that boundary — the path regex, the `is_active`
+filter, the `CONTROLLERS` dict, the `@action` marker (Python has no
+`public` keyword, so reachability has to be opt-in per method), the
+metadata table lookup, the signature arity check, and the declared-column
+allowlists behind `?sort_by=`, `?search=`, and `?<column>=`. Each is
+listed with what it blocks in [MODULES.md](MODULES.md).
+
+Two limits matter for the security model in this document. **Module
+routes have no role check**: `Depends(auth.get_current_user)` means any
+valid token, and a module's `actions` dict gates capability rather than
+identity — it is the same for every caller. Write actions **now work**: until 2026-08-31
+the three handlers passed an un-awaited coroutine as the request body, so
+every `POST` raised before touching the database; they `await` it now, and
+store/update/delete are verified against the running API. The role-check
+gap is written up under [MODULES.md](MODULES.md#known-gaps).
+
+Full reference — the controller contract, the hooks, the response shape,
+how to add a module, and the Laravel mapping — is in
+[MODULES.md](MODULES.md); the route and error reference is in
+[api/modules.md](api/modules.md).
+
 ## Frontend state
 
 - **`AuthContext`** holds `user`, `loading`, `login()`, `logout()` in
@@ -311,8 +456,213 @@ always sees it.
   above. It refetches only on mount, so a menu/role change elsewhere
   requires a page reload to show up, same caveat as `AuthContext`'s
   `user`.
+- **`GeneratedModulePage`** holds its own local state per module — rows,
+  pagination, search term, sort column and direction — and refetches
+  whenever any of them changes. Nothing about a module lives in a
+  context, so two module pages never share state; `ModuleRoute`'s
+  `key={modulePath}` deliberately throws the state away on navigation
+  rather than letting stale rows show under a new heading.
+- **`ThemeContext`** provides two contexts from one provider: `useTheme()`
+  for the resolved skin name and `useProfile()` for the user object it was
+  handed. It is wired in `App.jsx` via the `Themed` bridge and applies the
+  theme by stamping `<html>` — see "Styling and theming" below. Nothing
+  currently *consumes* either hook; the visible effect comes entirely from
+  the attributes it sets on the document element.
+- **`NavbarContext`** exists but is inert: it holds a `title` state whose
+  `useEffect` is commented out, and no component provides or consumes it
+  yet. It is scaffolding for a per-page title, not a working feature.
+  `components/sidebar/AdminSidebar.jsx` is likewise an empty placeholder
+  file, and `components/table/RowActions.jsx` is a working component that
+  nothing renders yet.
 
-## Configuration notes
+A note on the sidebar-to-module link, since it crosses the whole stack:
+`Sidebar.jsx` builds each link from the row's `slug` in
+`adm_admin_menuses`, while `api/dynamic.py` resolves a module by `path`
+in `adm_modules`. There is no foreign key between the two tables and
+nothing validates the pair, so a mismatch is a sidebar link that 404s
+with both rows looking correct.
+
+## Styling and theming
+
+Two systems, deliberately coexisting: **hand-written semantic CSS** (the
+original, and still what every component uses) and **Tailwind v4** (added
+2026-08-31, for new work). Everything lives in one file,
+`frontend/src/index.css`, in this order:
+
+```
+@import "tailwindcss";      Tailwind's preflight + utilities
+@theme static { ... }       Tailwind tokens, each pointing at a --var below
+:root { ... }               the project's own palette
+:root[data-app-theme="…"]   one block per role theme
+:root.app-theme-dark        the one skin that also swaps page surfaces
+.sidebar-link, .card, …     the semantic classes components actually use
+```
+
+Tailwind v4 needs no `tailwind.config.js` and no `postcss.config.js` —
+`@tailwindcss/vite` in `vite.config.js` plus the `@theme` block above is
+the whole configuration.
+
+**One palette, two consumers.** Every `@theme` token is defined as
+`var(--…)` pointing at the project's own property:
+
+```css
+@theme static { --color-skin-accent: var(--accent); }
+```
+
+So `bg-skin-accent` compiles to
+`background-color: var(--color-skin-accent)` → `var(--accent)`, which means
+a utility class picks up the signed-in user's role theme at runtime, the
+same way `.sidebar-link.active` does. `static` is required: without it
+Tailwind tree-shakes tokens no utility references, leaving
+`var(--color-skin-*)` undefined for hand-written rules.
+
+**The cascade gotcha, worth knowing before you reach for a utility.**
+Tailwind puts preflight and utilities inside `@layer base` / `@layer
+utilities`; the project's own CSS is *unlayered*, and unlayered rules beat
+every cascade layer regardless of order or specificity. Two consequences:
+
+| | |
+|---|---|
+| Good | Tailwind's preflight cannot disturb the existing look. The bare-element rules (`button`, `input`, `h1`, `label`) still win, so nothing had to change when Tailwind went in. |
+| Bad | A utility **loses** to an existing rule for the same property. `<button className="bg-skin-panel">` will not override `button { background: var(--accent) }`. Utilities are safe on elements the stylesheet doesn't already target, and on properties it doesn't already set. |
+
+The clean fix, when it matters, is to move those bare-element rules onto
+classes; until then, prefer utilities for layout and spacing on `div`s and
+new components, which is where nothing collides.
+
+### The component family
+
+`GeneratedModulePage` composes components rather than writing raw markup.
+The set is modelled on the Laravel project's own (`resources/js/Components/`
+at `C:/laragon/www/vram`), which is a **custom set, not Laravel Breeze** —
+worth stating because the Breeze names (`PrimaryButton`, `TextInput`,
+`InputLabel`) were an early wrong guess here and some still remain.
+
+Folders are lowercase, files PascalCase, matching the rest of the tree
+(`config/`, `context/`, `layout/`, `pages/`):
+
+| Group | Here | In the Laravel project |
+|---|---|---|
+| `table/` | `TableContainer`, `Table`, `TableHead`, `TableBody`, `TableRow`, `HeadData`, `RowData`, `RowActions`, `RowAction`, `BreadCrumbs` | `TableContainer`, `Thead`, `Tbody`, `Row`, `TableHeader`, `RowData`, `RowActions`, `RowAction`, `BreadCrumbs` — plus `Pagination`, `PerPage`, `TableSearch`, `RowStatus`, `Tabs`, `Buttons/`, `Icons/` |
+| `panel/` | `TopPanel`, `ContentPanel`, `Toast` | `ContentPanel` and `TopPanel` live under `Components/Table/` there, not a `Panel/` folder |
+| `toast/` | `DissapearingToast` | `Components/Toast/DissapearingToast` — same name, spelling included |
+| `button/` | `PrimaryButton`, `SecondaryButton`, `DangerButton` | `Table/Buttons/Button`, `Buttonv2`, `TableButton`, `BulkActions`, `Export`, `Import`, `Filters` |
+| `form/` | `InputLabel`, `TextInput`, `Checkbox`, `SelectInput`, `InputError` | `Forms/Input`, `Select`, `TextArea`, `InputFile`, `InputPassword`, `Card`; `Checkbox/Checkbox` |
+| `auth/` | `ProtectedRoute` | no equivalent — Inertia has server-side middleware instead |
+
+So the table primitives still need renaming to `Thead` / `Tbody` / `Row` /
+`TableHeader`, and the panels moving under `table/`, to line up fully. The
+naming is the only difference; the composition already matches.
+
+Two components encode a hard-won detail. `RowData`'s `center` prop used to
+apply only Tailwind's `text-center`, which loses to the unlayered
+`.module-table td` rule — it now emits `is-center` as well. And `RowAction`
+maps a descriptor's icon name (`"pencil"`, `"trash"`) onto its own action
+keys, so a module's `actions` metadata can choose the glyph.
+
+### The app shell
+
+`layout/` mirrors the Laravel project's `Layouts/layout/` region by region:
+
+```
+Layout                        (layout.jsx there)
+  NavbarProvider              mounted here, not in App.jsx — the title
+                               belongs to the authenticated shell
+    AppNavbar                 full width, above the sidebar
+    AppSidebar                below the navbar, on the left
+    main
+      AppContent              the ONLY scrolling region; owns breadcrumbs
+                               and mounts ToastProvider
+      AppFooter               pinned beneath it
+```
+
+That is a change from the previous shell, where the sidebar ran full height
+and the top bar sat inside the right-hand column.
+
+`AppContent` keeps its `id="app-content"` for a specific reason:
+`ToastContext.handleToast()` calls
+`document.getElementById("app-content").scrollIntoView(true)`, so a toast
+raised from halfway down a long table is actually seen.
+
+`ToastContext` is ported with its exact contract — the context value is an
+**object** `{ message, messageType, handleToast }` and `handleToast` takes
+`(message, messageType, duration = 3000, ...callbacks)`. Returning a bare
+function would break every caller ported across. `useToast()` throws outside
+a provider, as the original does; `useOptionalToast()` is an addition, for
+`GeneratedModulePage`, which must also work in a wrapper page rendered
+outside the shell.
+
+### The theme pipeline
+
+`config/themeOptions.js` is a **verbatim port** of the Laravel project's
+`resources/js/Config/themeOptions.js` (at `C:/laragon/www/vram`), because
+four consumers compare against its exact return values —
+`ThemeContext`, `AppContent`, `AppFooter` and `RowData`. Getting the
+spelling wrong there fails silently rather than loudly.
+
+| Export | Returns |
+|---|---|
+| `SYSTEM_THEME_ID` | `"system"` — the "follow the system theme" sentinel |
+| `legacyThemeOptions` | the 13 AdminLTE skins, `{ id, name, hex }` — `skin-blue` … `skin-white` |
+| `dashboardThemeOptions` | 17 `skin-palette-*` entries for chart and card colours |
+| `personalThemeOptions` | white + black + the dashboard palette, for a theme chooser |
+| `isCustomThemeColor(v)` | true only for a **6-digit** hex (`#134B70`); `#abc` is *not* custom |
+| `normalizeThemePreference(v)` | the value if supported, else `"system"` |
+| `resolveThemeColor(v, systemTheme)` | a full skin id (`"skin-blue"`), **not** a short name |
+| `getThemeClass(v)` | `"bg-skin-custom"` for a hex, else `` `bg-${resolvedTheme}` `` |
+| `getThemeHex(v)` | the hex for a skin id or class, or the hex itself |
+| `isDashboardPaletteTheme(v)` | whether it is one of the `skin-palette-*` entries |
+| `applyThemeColor(v)` | writes eight `--app-theme-*` custom properties on `<html>` |
+
+`applyThemeColor` is where the work happens. It uses the standard **YIQ
+perceptual brightness** formula to pick a readable foreground, then derives
+the rest of the palette from one hex:
+
+| Property | Purpose |
+|---|---|
+| `--app-theme-color` | the accent itself |
+| `--app-theme-contrast` | `#111827` or `#FFFFFF`, whichever is readable on it |
+| `--app-theme-readable` | darkened to 62% when the accent is light, for hover/active |
+| `--app-theme-light` | lightened 50% toward white |
+| `--app-theme-soft` / `-soft-strong` / `-border` / `-deep` | translucent variants at 10% / 18% / 34% / 28% |
+
+`index.css` aliases the project's own names onto those —
+`--accent: var(--app-theme-color)`, `--accent-dim:
+var(--app-theme-readable)`, `--accent-soft: var(--app-theme-soft-strong)` —
+so every existing rule keeps working and a theme change moves both sets at
+once. The literal fallbacks on `:root` are the original green, used before
+any theme has been applied.
+
+```mermaid
+flowchart LR
+    R[("adm_roles.theme_color")] --> M["GET /me → UserOut.theme_color"]
+    M --> A["AuthContext user"]
+    A --> T["Themed bridge in App.jsx"]
+    T --> P["ThemeProvider (ThemeContext.jsx)"]
+    P --> O["config/themeOptions.js"]
+    O -->|"applyThemeColor"| V["8 × --app-theme-* on html"]
+    O -->|"getThemeClass"| C["theme = 'bg-skin-blue'"]
+    C -->|"=== 'bg-skin-black'"| K["html.app-theme-dark<br/>swaps page surfaces"]
+    C --> D["RowData / AppContent / AppFooter<br/>dark-mode checks"]
+```
+
+Only `skin-black` swaps the page *surfaces* (via `.app-theme-dark`); every
+other skin is an accent change. That is why there is no longer a CSS block
+per skin — the hex table in `themeOptions.js` is the single source.
+
+`ThemeProvider` needs a user, and the user only exists inside
+`AuthProvider`, so `App.jsx` has a small `Themed` bridge that reads
+`useAuth()` and passes `user?.theme_color` down. Before login that is
+`undefined`, which normalises to `"system"` and resolves to `skin-blue`.
+
+Two caveats. Only one role exists today and its `theme_color` is null, so
+the machinery is unexercised — set the column to `skin-blue`,
+`skin-palette-teal` or `#134B70` to see all three paths. And
+`applyThemeColor` never *clears* the properties it sets: it returns early
+when a value has no hex, so a previous theme's tokens persist. That matches
+the original, and matters only if a theme is ever unset at runtime.
+
+## Configuration notes## Configuration notes
 
 These are hardcoded for local development and called out here so
 they're not missed before deploying anywhere real:
@@ -326,5 +676,5 @@ they're not missed before deploying anywhere real:
 - `backend/app/main.py` — CORS is locked to `http://localhost:5173` only.
 - `frontend/src/api.js` — `baseURL` is a literal `http://localhost:8000`.
 
-See `STUDY_GUIDE.md` §10 for suggested next steps (env vars, refresh
+See `STUDY_GUIDE.md` §11 for suggested next steps (env vars, refresh
 tokens).

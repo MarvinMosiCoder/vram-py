@@ -57,6 +57,61 @@ The authoritative list is `backend/requirements.txt` —
   "special" attributes frameworks look for — not something you invent.
 - Python variables: just `name = value` — no `const`/`let`/`var`.
 
+If you are coming from Laravel/PHP rather than JS, the same ground is
+covered from that angle in [docs/LARAVEL.md](docs/LARAVEL.md).
+
+### 4b. Decorators — the one new concept worth real attention
+
+Decorators are everywhere in this project (`@router.get`, `@controller`,
+`@action`), and they are the single biggest Python idea in it. A
+decorator is just **a function that takes a function and returns a
+replacement**. This:
+
+```python
+@action
+def get_index(self):
+    ...
+```
+
+is exactly the same as writing `get_index = action(get_index)` after the
+definition. Nothing magic, no framework scanning — the line above the
+`def` runs once, at class-definition time.
+
+The simplest one in the codebase, in `app/modules/registry.py`, doesn't
+even replace anything:
+
+```python
+def action(fn):
+    fn.__module_action__ = True   # stick a marker on the function object
+    return fn                     # hand it back unchanged
+```
+
+Functions are objects in Python, so you can hang an attribute off one.
+`api/dynamic.py` later checks for that attribute before it will call a
+method from a URL. Why bother? Because Python has no `public`/`private`
+keyword, so an unguarded `getattr(instance, name_from_url)` could reach
+*any* attribute on the object. `@action` is the missing `public`.
+
+`@controller("RolesController")` is one step up — a **decorator factory**,
+a function that returns a decorator, so it can take an argument:
+
+```python
+def controller(name):          # called with the string
+    def decorator(cls):        # ...returns the real decorator
+        CONTROLLERS[name] = cls
+        return cls
+    return decorator
+```
+
+`require_role(1)` in `core/auth.py` is the same trick in a different
+costume: call it with an argument, get back the function FastAPI will run
+per request.
+
+The closest PHP comparison is an attribute you wrote the handler for
+yourself; the closest JS one is a higher-order component. See
+[docs/MODULES.md](docs/MODULES.md) for how these two decorators become a
+whole module system.
+
 ## 5. Database models (`backend/app/models/`)
 
 One file per table, all re-exported from `models/__init__.py` so routes
@@ -70,8 +125,11 @@ called `vram_admin` ([docs/DATABASE.md](docs/DATABASE.md) sets it up):
   `id_adm_role` (FK -> Role), `token_version` (bumped on logout to
   revoke old tokens).
 - **Modules** (`adm_modules`) — a registerable feature area: `name`,
-  `icon`, `path`, `is_active`, `is_protected` (marks a built-in admin
-  module vs. a future user-generated one — not a permission flag).
+  `icon`, `path`, `table_name`, `controller`, `is_active`,
+  `is_protected` (marks a built-in admin module vs. a future
+  user-generated one — not a permission flag). This table went from
+  unused to load-bearing: `table_name` and `controller` are what the
+  dynamic module system reads on every request (§8).
 - **Menuses** (`adm_menuses`) — one sidebar entry: `path`, `icon`,
   `sorting`, `parent_id` (FK -> **Menuses**, the accordion group it sits
   under; `NULL` = top level), `id_adm_role` (FK -> Role, who can see it).
@@ -163,13 +221,109 @@ way, and [docs/API.md](docs/API.md) for full request/response shapes):
 | `GET /admin_sidebar` | any logged-in user (no role filter yet) | `sidebar.py` |
 | `GET /admin/users` | role id `1` only | `admin.py` |
 | `GET /editor/content` | role id `1` only (no separate editor role yet) | `editor.py` |
+| `GET\|POST /{module_path}…` | any logged-in user, no role check | `dynamic.py` (§8) |
+
+The last row is three *catch-all* routes rather than one endpoint, and
+they must be registered **last** in `routers.py`: `"/{module_path}"`
+matches any single-segment path, and FastAPI/Starlette takes the first
+route that matches in declaration order, so anything added below it would
+never be reached.
 
 `CORSMiddleware` is required because browsers block a page on
 `localhost:5173` (React) from calling `localhost:8000` (Python)
 without the server explicitly allowing it — a browser security rule,
 not a Python one.
 
-## 8. Frontend structure
+## 8. Dynamic modules (`backend/app/modules/`)
+
+The biggest idea in the project, and the reason §4b spends so long on
+decorators. **The problem it solves:** every admin table needs the same
+five things — a list, search, sort, pagination, and create/edit/delete.
+Hand-writing a route, a schema, and a React page per table means the
+tenth table costs as much as the first.
+
+**The solution:** describe the table instead of coding it.
+
+```python
+@controller("RolesController")
+class RolesController(ModuleController):
+    table_name = "adm_roles"
+    search_columns = ["name"]
+    table_fields = {"id": {"label": "ID"}, "name": {"label": "Role"}}
+    form_fields = {"name": {"label": "Role", "required": True, "max": 255}}
+```
+
+That is the entire Roles module. No route, no Pydantic schema, no query,
+no React file. `GET /roles` already returns a searchable, sortable,
+paginated list, because `ModuleController` (in `modules/base.py`) supplies
+`get_index`, `post_store`, `post_update`, and `post_delete`, and
+**inheritance** hands all four to every subclass. This is the Python port
+of the Laravel template's `GeneratedModuleController.php` — the port is
+compared line for line in [docs/MODULES.md](docs/MODULES.md#laravel-comparison).
+
+### How a URL becomes a method call
+
+There are only three routes in `api/dynamic.py`, and they cover every
+module that will ever exist:
+
+```
+GET  /roles                -> RolesController.get_index()
+GET  /users/edit/7         -> UsersController.get_edit("7")
+POST /users/bulk-action    -> UsersController.post_bulk_action()
+```
+
+The rule is mechanical: lowercase the HTTP verb, add `_index` if there is
+no action segment, otherwise add the action with hyphens turned into
+underscores. Two lookups happen in between — the URL's first segment
+finds a row in `adm_modules`, and that row's `controller` string finds a
+class.
+
+### Why a plain dict is a security feature
+
+```python
+CONTROLLERS: dict[str, type] = {}
+```
+
+Someone with database access can type anything into
+`adm_modules.controller`. This dict is the only way that string becomes a
+class, so a name nobody registered can never be reached — no matter what
+is in the row. Same idea one level down: `@action` marks which *methods*
+a URL may call, because Python has no `public` keyword and a bare
+`getattr(instance, name_from_url)` would otherwise reach any attribute on
+the object.
+
+That pattern — **an allowlist you can only add to from code** — shows up
+seven times in this system (path shape, active flag, controller name,
+action marker, table name, argument count, and which columns may be
+sorted/filtered/searched). All seven are tabulated in
+[docs/MODULES.md](docs/MODULES.md#where-the-trust-boundaries-are).
+
+### Registration happens at import time
+
+`modules/__init__.py` is three import lines, and they are not tidiness —
+they *are* the registration:
+
+```python
+from app.modules import roles_module  # noqa: F401
+```
+
+Importing the file runs the `@controller` decorator, which puts the class
+in `CONTROLLERS`. In Python, importing a module executes it, top to
+bottom, once. Forget the line and the route returns
+`500 unregistered controller` even though the class exists. Laravel would
+do this with service-provider auto-discovery; here the import list is the
+manifest.
+
+### What is not finished
+
+Worth knowing: the `POST` actions used to crash, because the three route
+handlers passed the request body without `await` — a coroutine, not a
+dict. Fixed on 2026-08-31, and create/edit/delete now work end to end
+from the UI. What is still open is per-role permissions on module routes:
+a valid token is enough. See
+[docs/MODULES.md](docs/MODULES.md#known-gaps).
+
+## 9. Frontend structure
 
 - **`api.js`** — one shared axios instance; an *interceptor* auto-attaches
   the saved JWT to every outgoing request, so you never repeat that
@@ -192,7 +346,77 @@ not a Python one.
   cards, and separately calls `/admin/users`, which the *backend*
   rejects for non-superadmins regardless of what the frontend shows.
 
-## 9. Running it
+### The module pages
+
+The frontend mirror of §8. One route in `App.jsx` serves every module:
+
+- **`App.jsx`** has a `"/:modulePath"` route alongside `"/dashboard"`.
+  React Router v6 ranks routes by **specificity, not declaration order**,
+  so the static `/dashboard` always wins — the exact opposite of the
+  backend, where declaration order is everything.
+- **`ModuleRoute.jsx`** reads the `:modulePath` param, looks it up in
+  `MODULE_PAGES`, and renders either the custom page or the shared
+  runtime. `key={modulePath}` forces a remount so you never see the
+  previous module's rows under the new module's heading.
+- **`modulePages.js`** is one line per module that needs a custom page —
+  `{ roles: RolesPage }`. A module with no entry still works.
+- **`GeneratedModulePage.jsx`** is the shared runtime: it renders
+  whatever `columns` / `rows` / `pagination` the backend sent, so it
+  already works for a module that does not exist yet. **Don't edit it for
+  one module.**
+- **`RolesPage.jsx`** is what "custom" looks like in practice — a single
+  `renderCell` prop that draws `is_superadmin` as a badge and
+  `theme_color` as a colour swatch. Everything else is inherited.
+- **`NavbarContext.jsx`** and **`components/sidebar/AdminSidebar.jsx`**
+  are scaffolding, not features: the first holds a `title` state with its
+  `useEffect` commented out and nothing providing it, the second is an
+  empty file.
+
+The trap to remember: `Sidebar.jsx` builds its link from the `slug`
+column in `adm_admin_menuses`, but the backend finds the module by the
+`path` column in `adm_modules`. Nothing checks that those two agree, so a
+typo gives you a sidebar link that 404s while both rows look fine.
+
+### Styling and the role theme
+
+Two styling systems live in `src/index.css`, on purpose:
+
+- **Hand-written semantic CSS** — `.card`, `.sidebar-link`,
+  `.module-table`. This is what every component uses today.
+- **Tailwind v4** — added 2026-08-31 for new work. No
+  `tailwind.config.js` and no `postcss.config.js`: v4 is configured by an
+  `@theme` block inside the CSS, with `@tailwindcss/vite` in
+  `vite.config.js`.
+
+The trick that makes them agree is that every Tailwind colour token points
+at one of the project's own custom properties:
+
+```css
+@theme static { --color-skin-accent: var(--accent); }
+```
+
+so `bg-skin-accent` resolves to `var(--accent)` — the same variable the
+theme changes at runtime. One palette, two ways to spell it.
+
+**The thing that will bite you:** Tailwind's utilities live in
+`@layer utilities`, and CSS says *unlayered rules beat every layer*. The
+project's own CSS is unlayered, so `<button className="bg-skin-panel">`
+will **not** override the existing `button { background: var(--accent) }`.
+Utilities work fine on `div`s and new components; they lose wherever the
+old stylesheet already targets the same element and property.
+
+**The theme itself** comes from `adm_roles.theme_color`, which reaches the
+browser through `GET /me` → `AuthContext` → the `Themed` bridge in
+`App.jsx` → `ThemeProvider`. `config/themeOptions.js` then decides what to
+do with the value: a skin name like `skin-blue` stamps
+`data-app-theme="blue"` on `<html>` and a palette in `index.css` takes
+over; a raw hex like `#93701A` sets `--accent` inline instead. Both spellings
+exist in the codebase, which is why the file accepts either.
+
+Only one role exists today and its `theme_color` is null, so this is built
+but unexercised — set the column to `skin-blue` and reload to watch it work.
+
+## 10. Running it
 
 ```bash
 # Backend  (PostgreSQL must already be running — see below)
@@ -222,11 +446,31 @@ FastAPI docs at `http://localhost:8000/docs`) — it's created with no
 role (`id_adm_role` is `null`), so logging in as them shows the locked
 cards, since none of the role-id checks match.
 
-## 10. Where to go next
+## 11. Where to go next
 
+Fix first — these are known-broken or known-open, not ideas:
+
+- **Put a role check on the module routes.** Right now any logged-in user
+  can read every row of every module's table.
+- **Validate the `slug` / `path` pairing** between `adm_admin_menuses`
+  and `adm_modules`, or read the sidebar link from `adm_modules` instead.
+- **Seed the module and menu rows.** Nothing creates them — not
+  `seed.py`, not a migration — so a freshly migrated database has an
+  empty sidebar and no modules, and the existing `roles` rows were
+  inserted by hand. Adding them to `seed.py` makes the project
+  reproducible from scratch.
+
+Then build:
+
+- A create/edit form in `GeneratedModulePage` — the backend already sends
+  `formFields` and the browser currently ignores it.
+- A real Users module to replace the `users_module.py` stub, using
+  `before_store()` to hash the password.
+- Nest the sidebar by `parent_id` — the column is returned and unused.
 - Add a "create user" form in the frontend (admin-only) that calls `POST /register`.
 - Add refresh tokens (current JWT expires after 60 minutes, hardcoded in `auth.py`).
 - Move `SECRET_KEY` out of the code and into an environment variable.
 - Move `DATABASE_URL` out of `database.py` as well — the Postgres
   password is sitting in source in plain text, and `alembic/env.py`
   imports it from there, so it is a one-place change.
+- Write the first test. There is no test harness at all yet.

@@ -1,14 +1,74 @@
+@import "tailwindcss";
+
+/* --- Shared design tokens ------------------------------------------
+   Tailwind v4 is configured here rather than in a tailwind.config.js.
+   Every token below points at one of the project's own custom properties,
+   so the utility classes and the hand-written CSS read from ONE palette --
+   which means `bg-skin-accent` follows the signed-in user's role theme for
+   free, exactly like .sidebar-link.active does.
+
+   `static` makes Tailwind emit every token even when no utility uses it
+   yet -- without it v4 tree-shakes unused ones, so `var(--color-skin-*)`
+   would be undefined in hand-written CSS.
+
+   Deliberately no font tokens: --font-body / --font-mono already live on
+   :root below, and redefining them here would collide. */
+@theme static {
+  --color-skin-bg:          var(--bg);
+  --color-skin-panel:       var(--panel);
+  --color-skin-border:      var(--panel-border);
+  --color-skin-text:        var(--text);
+  --color-skin-dim:         var(--text-dim);
+  --color-skin-accent:      var(--accent);
+  --color-skin-accent-dim:  var(--accent-dim);
+  --color-skin-accent-soft: var(--accent-soft);
+  --color-skin-danger:      var(--danger);
+
+  /* Used by RowData.jsx as `bg-black-table-color`, carried over from the
+     Laravel template's own Tailwind theme. Without a token here the class
+     compiles to nothing. */
+  --color-black-table-color: var(--panel);
+}
+
 :root {
   --bg: #0f1115;
   --panel: #171a21;
   --panel-border: #262b35;
   --text: #e7e6e1;
   --text-dim: #8a8f9c;
-  --accent: #3ecf8e;
-  --accent-dim: #2a8f63;
+  /* applyThemeColor() in config/themeOptions.js writes the --app-theme-*
+     tokens (ported verbatim from the Laravel project). The project's own
+     --accent* names are aliases onto them, so every existing rule keeps
+     working and a theme change moves both sets at once. The fallbacks are the
+     original green, used before any theme has been applied. */
+  --app-theme-color: #3ecf8e;
+  --app-theme-contrast: #0b0d10;
+  --app-theme-readable: #2a8f63;
+  --app-theme-light: #9ee7c6;
+  --app-theme-soft: rgba(62, 207, 142, 0.10);
+  --app-theme-soft-strong: rgba(62, 207, 142, 0.18);
+  --app-theme-border: rgba(62, 207, 142, 0.34);
+  --app-theme-deep: rgba(62, 207, 142, 0.28);
+
+  --accent: var(--app-theme-color);
+  --accent-dim: var(--app-theme-readable);
+  --accent-soft: var(--app-theme-soft-strong);
   --danger: #e2665a;
   --font-body: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* --- Theme surfaces -----------------------------------------------
+   Only one skin swaps the page surfaces rather than just the accent --
+   skin-black, which ThemeContext toggles as .app-theme-dark. Every other
+   skin is an accent change, applied through the --app-theme-* tokens above,
+   so there is no longer a palette block per skin. */
+:root.app-theme-dark {
+  --bg: #07080a;
+  --panel: #101318;
+  --panel-border: #1f242d;
+  --text: #f1f0ec;
+  --text-dim: #9aa0ad;
 }
 
 * { box-sizing: border-box; }
@@ -96,10 +156,9 @@ button:hover { background: var(--accent-dim); color: var(--text); }
   font-family: var(--font-mono);
 }
 
-.app-shell {
-  display: flex;
-  min-height: 100vh;
-}
+.app-shell { min-height: 100vh; display: flex; flex-direction: column; }
+.app-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.app-main { display: flex; flex-direction: column; flex: 1; min-width: 0; overflow: hidden; }
 
 .sidebar {
   width: 220px;
@@ -139,13 +198,8 @@ button:hover { background: var(--accent-dim); color: var(--text); }
 }
 
 .sidebar-link.active {
-  background: rgba(62, 207, 142, 0.12);
+  background: var(--accent-soft);
   color: var(--accent);
-}
-
-.app-main {
-  flex: 1;
-  min-width: 0;
 }
 
 .top-bar {
@@ -161,7 +215,7 @@ button:hover { background: var(--accent-dim); color: var(--text); }
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  background: rgba(62, 207, 142, 0.12);
+  background: var(--accent-soft);
   color: var(--accent);
   border: 1px solid var(--accent-dim);
   padding: 3px 9px;
@@ -214,3 +268,418 @@ button:hover { background: var(--accent-dim); color: var(--text); }
   font-size: 13px;
 }
 .signout:hover { color: var(--text); background: var(--panel-border); }
+
+/* --- Generated module pages ---------------------------------------- */
+.module-page { /* layout only -- the card itself comes from .content-panel */ }
+
+/* A panel nested inside another panel: recessed rather than raised, so it
+   does not read as a card-inside-an-identical-card. */
+.content-panel.is-inset {
+  background: var(--bg);
+  border-color: var(--panel-border);
+}
+
+.module-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.module-head h2 { margin: 0; font-size: 18px; }
+
+.module-tools { display: flex; align-items: center; gap: 8px; }
+
+.module-search {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 7px 12px;
+  width: 200px;
+}
+.module-search:focus { outline: none; border-color: var(--accent-dim); }
+
+.module-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.module-table th,
+.module-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--panel-border);
+  font-size: 13px;
+}
+.module-table tbody tr:last-child td { border-bottom: none; }
+.module-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+.module-table th:hover { color: var(--text); }
+.module-table tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
+
+.module-pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+.module-pager button {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  border-radius: 8px;
+  padding: 5px 12px;
+  width: auto;
+  margin: 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+.module-pager button:hover:not(:disabled) { color: var(--text); background: var(--panel-border); }
+.module-pager button:disabled { opacity: 0.35; cursor: default; }
+
+.muted { color: var(--text-dim); font-size: 13px; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--accent-dim);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.swatch-cell { display: inline-flex; align-items: center; gap: 8px; }
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--panel-border);
+  display: inline-block;
+}
+
+/* --- Row actions ---------------------------------------------------
+   Replaces RowActions.jsx's original Tailwind utilities
+   ("flex items-center justify-center gap-2"). Those would work now that
+   Tailwind is installed, but this also styles the buttons inside the
+   cluster, which the bare layout utilities did not. */
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.row-actions button,
+.row-actions a {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  border-radius: 6px;
+  width: auto;
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+.row-actions button:hover,
+.row-actions a:hover { color: var(--text); background: var(--panel-border); }
+.row-actions .danger {
+  border-color: rgba(226, 102, 90, 0.35);
+  color: var(--danger);
+}
+.row-actions .danger:hover { background: rgba(226, 102, 90, 0.14); color: var(--danger); }
+
+/* --- Row-action toast + record panel -------------------------------
+   Added when the row-actions column was ported off Inertia: the original
+   leaned on a global toast helper and Inertia modals, neither of which
+   exists here. */
+.module-toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+}
+.module-toast.is-success { border-color: var(--accent-dim); color: var(--accent); }
+.module-toast.is-danger  { border-color: rgba(226, 102, 90, 0.45); color: var(--danger); }
+.module-toast-close {
+  margin: 0 0 0 auto;
+  width: auto;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.module-toast-close:hover { background: transparent; color: inherit; opacity: 0.7; }
+
+.module-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 20px;
+}
+.module-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.module-panel-head h3 { margin: 0; font-size: 15px; }
+.module-panel-foot { display: flex; justify-content: flex-end; }
+.module-panel-foot button { width: auto; margin: 0; }
+
+.module-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+.module-field { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.module-field-label { font-size: 12px; color: var(--text-dim); }
+.module-field-req { color: var(--danger); font-style: normal; }
+.module-field input[type="text"],
+.module-field input[type="number"] { width: 100%; }
+.module-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  align-self: flex-start;
+  accent-color: var(--accent);
+}
+.module-field-error { font-size: 12px; color: var(--danger); }
+
+.module-actions-col { cursor: default; width: 1%; white-space: nowrap; }
+.module-actions-col:hover { color: var(--text-dim); }
+
+/* --- Component family ----------------------------------------------
+   Classes for the components under src/components/, grouped the same way:
+   Button/, Form/, Panel/, Table/. These replace the ad-hoc .module-* and
+   borrowed .signout classes the module pages used before. */
+
+/* Button/ */
+.btn {
+  width: auto;
+  margin: 0;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.btn:disabled { opacity: 0.4; cursor: default; }
+.btn-primary { background: var(--accent); color: #0b0d10; border-color: var(--accent); }
+.btn-primary:hover:not(:disabled) { background: var(--accent-dim); color: var(--text); }
+.btn-secondary { background: transparent; color: var(--text-dim); border-color: var(--panel-border); }
+.btn-secondary:hover:not(:disabled) { background: var(--panel-border); color: var(--text); }
+.btn-danger { background: transparent; color: var(--danger); border-color: rgba(226, 102, 90, 0.45); }
+.btn-danger:hover:not(:disabled) { background: rgba(226, 102, 90, 0.14); color: var(--danger); }
+
+/* Form/ */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+.form-field { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.input-label { font-size: 12px; color: var(--text-dim); }
+.input-required { color: var(--danger); font-style: normal; }
+.text-input, .select-input { width: 100%; }
+.select-input {
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+.checkbox-input {
+  width: 16px;
+  height: 16px;
+  align-self: flex-start;
+  accent-color: var(--accent);
+}
+.input-error { font-size: 12px; color: var(--danger); }
+
+/* Panel/ */
+.top-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.top-panel-title { margin: 0; font-size: 18px; }
+.top-panel-tools { display: flex; align-items: center; gap: 8px; }
+.top-panel-tools .text-input { width: 200px; }
+
+.content-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 20px;
+}
+.content-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.content-panel-title { margin: 0; font-size: 15px; }
+.content-panel-foot { display: flex; justify-content: flex-end; }
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+}
+.toast.is-success { border-color: var(--accent-dim); color: var(--accent); }
+.toast.is-danger  { border-color: rgba(226, 102, 90, 0.45); color: var(--danger); }
+.toast-close {
+  margin: 0 0 0 auto;
+  width: auto;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.toast-close:hover { background: transparent; opacity: 0.7; }
+
+/* Table/ */
+.table-container {
+  overflow-x: auto;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+/* The frame owns the border and radius now, so the table inside must not
+   draw its own or they double up on the edges. */
+.table-container > .module-table { border: none; border-radius: 0; }
+.module-table th.is-plain { cursor: default; }
+.module-table th.is-plain:hover { color: var(--text-dim); }
+.module-table th.is-center, .module-table td.is-center { text-align: center; }
+.module-table tr.is-selected { background: var(--accent-soft); }
+.sort-caret { color: var(--accent); }
+
+/* --- App shell regions ---------------------------------------------
+   AppContent is the only scrolling region; AppFooter is pinned under it and
+   AppNavbar/AppSidebar stay put. Ported from Layouts/layout/layout.jsx. */
+.app-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+@media (min-width: 768px) { .app-content { padding: 20px 24px; } }
+.app-content.is-dark { background: var(--bg); }
+.app-content-inner {
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 1600px;
+}
+.content-area { position: relative; min-height: 360px; padding-bottom: 16px; }
+
+.breadcrumbs { font-size: 12px; color: var(--text-dim); }
+.breadcrumbs ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.breadcrumbs li { display: flex; align-items: center; gap: 6px; }
+.breadcrumbs a { color: var(--text-dim); text-decoration: none; }
+.breadcrumbs a:hover { color: var(--accent); }
+.breadcrumbs [aria-current="page"] span { color: var(--text); font-weight: 500; }
+.breadcrumbs-sep { color: var(--panel-border); }
+
+.layout-footer {
+  margin-top: auto;
+  display: flex;
+  min-height: 48px;
+  width: 100%;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--panel-border);
+  padding: 0 16px;
+  font-size: 13px;
+  color: var(--text-dim);
+  user-select: none;
+  position: relative;
+}
+@media (min-width: 768px) { .layout-footer { padding: 0 24px; } }
+.layout-footer.is-dark { background: var(--panel); }
+.layout-footer-brand { display: none; font-size: 12px; }
+.layout-footer-toggle {
+  width: auto;
+  margin: 0;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.layout-footer-toggle:hover { background: transparent; color: var(--text); }
+.layout-footer-watermark {
+  position: absolute;
+  right: 15px;
+  bottom: 40px;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--accent);
+  color: var(--app-theme-contrast);
+}
+@media (min-width: 768px) {
+  .layout-footer-brand { display: block; }
+  .layout-footer-toggle, .layout-footer-watermark { display: none; }
+}
+
+/* The navbar is full width and above the sidebar now, not inside the
+   right-hand column. */
+.top-bar { flex-shrink: 0; background: var(--panel); }
+.sidebar { overflow-y: auto; }
+

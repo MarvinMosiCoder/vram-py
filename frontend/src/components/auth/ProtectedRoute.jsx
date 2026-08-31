@@ -1,5 +1,5 @@
 import { Navigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 
 // Wrap any route with this. Pass allowedRoles to also restrict by role.
 // Usage: <ProtectedRoute allowedRoles={["admin"]}><AdminPage /></ProtectedRoute>

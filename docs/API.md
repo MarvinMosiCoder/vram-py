@@ -16,15 +16,25 @@ Routes are documented per feature area under [api/](api/), mirroring how
 | Sidebar | `GET /admin_sidebar` | [api/sidebar.md](api/sidebar.md) | `api/sidebar.py` |
 | Admin | `GET /admin/users` | [api/admin.md](api/admin.md) | `api/admin.py` |
 | Editor | `GET /editor/content` | [api/editor.md](api/editor.md) | `api/editor.py` |
+| Modules | `GET\|POST /{module_path}[/{action}[/…]]` | [api/modules.md](api/modules.md) | `api/dynamic.py` |
+
+**The route list above is not exhaustive, by design.** The Modules row is
+three catch-all routes that serve whatever rows exist in `adm_modules`,
+so the paths available on a given database are the `path` values of its
+active module rows — `/roles` with the seeded data. Adding a module adds
+endpoints without adding code to `api/`; see [MODULES.md](MODULES.md).
+Because `/{module_path}` matches any single segment, `dynamic.router` is
+included **last** in `api/routers.py`, and every static route above wins.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how the auth/RBAC dependency
 chain behind these routes is wired together, and why the routes and docs
-are both split this way.
+are both split this way. Coming from Laravel? [LARAVEL.md](LARAVEL.md)
+maps every route, guard, and schema here onto its Laravel counterpart.
 
 ## Authentication
 
 This section applies to every route above, so it lives here instead of
-being repeated five times.
+being repeated in each per-feature file.
 
 All routes except `POST /register`, `POST /login`, `/docs`, `/redoc`, and
 `/openapi.json` require a JWT, obtained from `POST /login`, sent as:
@@ -69,3 +79,10 @@ Roles are identified by `adm_roles.id`, not by name — see
 | GET | `/admin_sidebar` | any logged-in user | [api/sidebar.md](api/sidebar.md) |
 | GET | `/admin/users` | role id `1` | [api/admin.md](api/admin.md) |
 | GET | `/editor/content` | role id `1` | [api/editor.md](api/editor.md) |
+| GET / POST | `/{module_path}` | any logged-in user | [api/modules.md](api/modules.md) |
+| GET / POST | `/{module_path}/{action}` | any logged-in user | [api/modules.md](api/modules.md) |
+| GET / POST | `/{module_path}/{action}/{rest}` | any logged-in user | [api/modules.md](api/modules.md) |
+
+The three module routes take **no role check at all** — a valid token is
+enough. A module's `actions` flags gate which *capabilities* exist
+(create / edit / delete), not who may use them.

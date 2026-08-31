@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api import auth, dashboard, sidebar, admin, editor
+from app.api import auth, dashboard, sidebar, admin, editor, dynamic
 
 # Each feature area owns its own APIRouter (see auth.py, admin.py, etc.) —
 # this just combines them into the single router main.py mounts, so
@@ -11,3 +11,7 @@ router.include_router(dashboard.router)
 router.include_router(sidebar.router)
 router.include_router(admin.router)
 router.include_router(editor.router)
+
+# MUST stay last. "/{module_path}" matches any single-segment path, so
+# Starlette (first match wins) would shadow anything included below it.
+router.include_router(dynamic.router)
