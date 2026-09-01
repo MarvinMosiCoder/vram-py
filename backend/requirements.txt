@@ -8,3 +8,4 @@ bcrypt
 email-validator
 alembic
 psycopg2-binary
+openpyxl

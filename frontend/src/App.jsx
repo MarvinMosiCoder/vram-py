@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
@@ -21,62 +21,49 @@ function Themed({ children }) {
   );
 }
 
+// THIS FILE DOES NOT GROW WITH THE APP. It used to carry one <Route> per
+// module action -- /:modulePath, /:modulePath/:moduleAction,
+// /:modulePath/:moduleAction/:recordId -- and would have needed another for
+// every custom page. Both halves of that are now derived:
+//
+//   * the guard and the shell are declared ONCE, in the pathless layout
+//     route below (Laravel's Route::group(['middleware' => ['auth',
+//     'check.user']]) around every admin route in routes/web.php);
+//   * every module URL, however deep, goes through one splat route to
+//     ModuleRoute, which resolves the page off the filesystem.
+//
+// Adding a page means adding a FILE under pages/modules/ -- see
+// pages/modulePages.js. Nothing is registered here.
 export default function App() {
   return (
     <AuthProvider>
       <Themed>
         <Routes>
           <Route path="/login" element={<Login />} />
+
+          {/* Pathless layout route: children inherit the auth guard and the
+              admin shell, so a new static page is a single line. */}
           <Route
-            path="/dashboard"
             element={
               <ProtectedRoute>
                 <Layout>
-                  <Dashboard />
+                  <Outlet />
                 </Layout>
               </ProtectedRoute>
             }
-          />
-          {/* One route serves every module in adm_modules. React Router
-            ranks by specificity, not declaration order, so the static
-            "/dashboard" above always wins over this. */}
-          <Route
-            path="/:modulePath"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <ModuleRoute />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-          {/* The route form of create, for useAddRoute: /roles/add.
-              Two segments, so without this it fell through to the
-              catch-all and bounced to /dashboard. */}
-          <Route
-            path="/:modulePath/:moduleAction"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <ModuleRoute />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-          {/* The route form of a row action, for useEditRoute:
-              /roles/edit/1. Same component -- GeneratedModulePage reads
-              :moduleAction and :recordId and opens its edit panel. Without
-              this, that prop would navigate straight into the catch-all. */}
-          <Route
-            path="/:modulePath/:moduleAction/:recordId"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <ModuleRoute />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
+          >
+            <Route path="/dashboard" element={<Dashboard />} />
+
+            {/* ONE route for every module and every module action:
+                /roles, /roles/add, /roles/edit/7,
+                /roles/edit-permissions/7, ... This is the equivalent of
+                CommonHelpers::routeController()'s
+                /{one?}/{two?}/{three?}/{four?}/{five?} wildcards, minus the
+                five-segment ceiling. React Router ranks by specificity, not
+                declaration order, so "/dashboard" above always wins. */}
+            <Route path="/:modulePath/*" element={<ModuleRoute />} />
+          </Route>
+
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Themed>

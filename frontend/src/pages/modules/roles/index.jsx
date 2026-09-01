@@ -1,4 +1,4 @@
-import GeneratedModulePage from "./vramjsx/GeneratedModulePage";
+import GeneratedModulePage from "../../admvram/vramjsx/GeneratedModulePage";
 
 // The Roles module's own page. Laravel's equivalent is
 // resources/js/Pages/Roles/Roles.jsx, which is usually just

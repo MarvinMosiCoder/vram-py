@@ -174,8 +174,9 @@ from `{table_name}`, and everything else comes from ModuleController.
   form_fields    the create/edit form, plus its validation rules
   search_columns the allowlist for ?search=
 
-Hooks available to override: custom_index_query, index_row, before_store,
-after_store, before_update, after_update, before_delete, after_delete.
+The create/update seams are stubbed at the bottom of this file. Other
+hooks available to override: custom_index_query, index_row, before_update,
+after_update, before_delete, after_delete, handle_custom_bulk_action.
 See docs/MODULES.md.
 """
 from app.helpers.generated_module import ModuleController
@@ -196,13 +197,94 @@ class {controller_name}(ModuleController):
     form_fields = {form_fields}
 
     actions = {{"view": True, "create": True, "edit": True, "delete": True}}
+
+    # --- Create and update: the ladder ---------------------------------
+    #
+    # Everything below is INERT as generated -- each rung does exactly what
+    # ModuleController already does. They are here as labelled seams, so a
+    # module with real logic has an obvious place to put it instead of
+    # having to read the base class to find one. Delete any rung you do not
+    # use; keeping an inert one costs nothing but noise.
+    #
+    # Every rung applies to EVERY write path at once -- the runtime's
+    # built-in panel, /{path}/add, and any custom page under
+    # frontend/src/pages/modules/{path}/ -- because all three POST to
+    # /{path}/store. That is the reason to override here rather than to
+    # write a second endpoint for a custom page: two write paths drift,
+    # one does not.
+
+    def validate(self, data):
+        """Rung 2 -- business rules a form_fields dict cannot state.
+
+        super() first, so `required` and `max` from form_fields still
+        apply. Raise HTTPException(422, detail={{"column": "message"}}) to
+        reject: a {{field: message}} DICT is what the React runtime reads to
+        light up the offending input, while a plain string only ever
+        reaches a toast.
+
+        Called by BOTH post_store and post_update. On update self.body
+        carries the primary key, so exclude the current row from any
+        uniqueness check -- otherwise a record collides with itself and can
+        never be saved under its own value:
+
+            current_id = self.body.get(self.primary_key)
+            if current_id is not None:
+                stmt = stmt.where(
+                    self.table.c[self.primary_key] != self.cast_key(current_id)
+                )
+        """
+        return super().validate(data)
+
+    def before_store(self, payload):
+        """Rung 1 -- shape the payload on its way into the INSERT.
+
+        MUST return the payload; a bare mutation is silently dropped. Runs
+        AFTER payload(), which keeps only declared form columns and drops
+        None -- so a key added here bypasses that filter, and a column you
+        need to write as NULL has to be handled by overriding payload().
+        """
+        return payload
+
+    def after_store(self, payload, record_id):
+        """Rung 1 -- side effects, once the row has an id.
+
+        post_store() has already committed by the time this runs, so
+        anything written here needs a commit of its own.
+        """
+        pass
+
+    # Rung 3 -- own the write, or the response, entirely.
+    # Uncommenting this needs `action` on the registry import at the top:
+    #     from app.modules.registry import action, controller
+    #
+    # RE-APPLY @action ON EVERY OVERRIDE OF AN INHERITED ACTION. dynamic.py
+    # dispatches only on methods carrying __module_action__, and an override
+    # is a NEW function object, so the base class's decorator does not carry
+    # over. Leave it off and the endpoint 404s -- which reads like a missing
+    # route rather than a missing decorator.
+    #
+    # Delegate to super() unless the write itself must differ (a second
+    # table, a transaction spanning both). The base already runs validate()
+    # -> payload() -> before_store() -> stamps -> RETURNING id ->
+    # after_store(), and each of those picks up the overrides above, so
+    # re-typing the INSERT only creates a second thing to keep in sync.
+    #
+    # @action
+    # def post_store(self):
+    #     result = super().post_store()
+    #     result["redirect"] = "/{path}/edit/%s" % result["id"]
+    #     return result
 '''
 
 
-def render_controller(controller_name, table_name, meta, name, date):
+def render_controller(controller_name, table_name, meta, name, date, path):
+    # `path` is interpolated into the generated comments so they name the
+    # module's real URLs (/roles/store) instead of a placeholder nobody can
+    # copy-paste.
     return TEMPLATE.format(
         name=name,
         date=date,
+        path=path,
         controller_name=controller_name,
         table_name=table_name,
         primary_key=meta["primary_key"],
@@ -260,7 +342,7 @@ def generate(db, name, path, table_name, icon="fa fa-circle", overwrite=False):
         raise GeneratorError("A module already uses the path '%s'." % path)
 
     source = render_controller(controller_name, table_name, meta, name,
-                               datetime.now().strftime("%Y-%m-%d"))
+                               datetime.now().strftime("%Y-%m-%d"), path)
     with open(file_path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(source)
 

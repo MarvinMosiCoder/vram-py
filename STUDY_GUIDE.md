@@ -360,21 +360,24 @@ a valid token is enough. See
 
 The frontend mirror of §8. One route in `App.jsx` serves every module:
 
-- **`App.jsx`** has a `"/:modulePath"` route alongside `"/dashboard"`.
-  React Router v6 ranks routes by **specificity, not declaration order**,
-  so the static `/dashboard` always wins — the exact opposite of the
-  backend, where declaration order is everything.
-- **`ModuleRoute.jsx`** reads the `:modulePath` param, looks it up in
-  `MODULE_PAGES`, and renders either the custom page or the shared
-  runtime. `key={modulePath}` forces a remount so you never see the
-  previous module's rows under the new module's heading.
-- **`modulePages.js`** is one line per module that needs a custom page —
-  `{ roles: RolesPage }`. A module with no entry still works.
+- **`App.jsx`** has one `"/:modulePath/*"` splat route alongside
+  `"/dashboard"`, both inside a pathless layout route that declares the
+  auth guard and the shell once. React Router v6 ranks routes by
+  **specificity, not declaration order**, so the static `/dashboard`
+  always wins — the exact opposite of the backend, where declaration order
+  is everything. The file does not grow when you add a page.
+- **`ModuleRoute.jsx`** splits the splat into `modulePath` / `action` /
+  `args`, resolves the page most-specific-first, and renders either the
+  custom page or the shared runtime. `key` forces a remount so you never
+  see the previous module's rows under the new module's heading.
+- **`modulePages.js`** is an `import.meta.glob` over `pages/modules/**`:
+  the filesystem is the registry, so a page is registered by being
+  created. A module with no file still works.
 - **`GeneratedModulePage.jsx`** is the shared runtime: it renders
   whatever `columns` / `rows` / `pagination` the backend sent, so it
   already works for a module that does not exist yet. **Don't edit it for
   one module.**
-- **`RolesPage.jsx`** is what "custom" looks like in practice — a single
+- **`modules/roles/index.jsx`** is what "custom" looks like — a single
   `renderCell` prop that draws `is_superadmin` as a badge and
   `theme_color` as a colour swatch. Everything else is inherited.
 - **`NavbarContext.jsx`** and **`components/sidebar/AdminSidebar.jsx`**

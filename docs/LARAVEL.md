@@ -57,7 +57,7 @@ an inference rather than something the code states, it says so.
 | Logout | `Auth::logout()` invalidates the session | `POST /logout` increments `adm_users.token_version` | JWTs are stateless, so revocation needs a version stamped into the token and compared on every request |
 | Token expiry | session lifetime in `config/session.php` | `ACCESS_TOKEN_EXPIRE_MINUTES = 60` in `core/auth.py` | no refresh flow; expiry means logging in again |
 | View layer | Blade, or Inertia pages | React + React Router, fetched over axios | |
-| Page resolution | Inertia resolves a controller's page name to a component | `App.jsx` route table, plus `MODULE_PAGES` for modules | |
+| Page resolution | Inertia resolves a controller's page name to a component | one splat route in `App.jsx`, plus `import.meta.glob` in `modulePages.js` | the same glob the original's `app.jsx` resolves pages with |
 | Shared props | `Inertia::share`, `HandleInertiaRequests` | `AuthContext` calling `GET /me` on mount | the client resolves its own user, because the server never renders a page |
 | Persistent layout | an Inertia persistent layout component | `layout/Layout.jsx` wrapping each route element | |
 | Sidebar partial | a Blade partial fed from shared props | `layout/Sidebar.jsx` fetching `GET /admin_sidebar` | one extra HTTP call where Laravel had none |
@@ -198,8 +198,9 @@ counterpart of the Laravel template's
 a controller class, the class declares `table_fields` and `form_fields`,
 and it inherits a whole searchable, sortable, paginated CRUD surface.
 `@controller(...)` plus the `CONTROLLERS` dict does the job Laravel does
-by resolving the controller string, and `modulePages.js` does the job
-Inertia does when it resolves a controller's page name to a component.
+by resolving the controller string, and `modulePages.js` globs
+`pages/modules/**` to do the job Inertia's `resolve` does when it maps a
+page name to a component.
 
 The full treatment — every guard, every hook, the Laravel mapping table,
 and the known gaps — is in **[MODULES.md](MODULES.md)**.

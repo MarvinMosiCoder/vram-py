@@ -113,9 +113,13 @@ frontend/
     layout/AppFooter.jsx    copyright strip
     pages/Login.jsx
     pages/Dashboard.jsx
-    pages/ModuleRoute.jsx   sits behind "/:modulePath", picks the page component
-    pages/modulePages.js    adm_modules.path -> a custom page component
-    pages/admvram/RolesPage.jsx            the Roles module's wrapper page
+    pages/ModuleRoute.jsx   sits behind "/:modulePath/*", splits the splat into
+                             module / action / args, picks the page component
+    pages/modulePages.js    import.meta.glob over pages/modules/** -- the
+                             filesystem is the page registry, nothing is listed
+    pages/modules/roles/index.jsx          the Roles module's wrapper page
+    pages/modules/roles/edit-permissions.jsx
+                            /roles/edit-permissions/<id>, claimed by filename
     pages/admvram/vramjsx/GeneratedModulePage.jsx
                             the shared module runtime — renders whatever
                              metadata render_index() sends; not per-module
@@ -408,7 +412,7 @@ flowchart LR
     M --> T[("Base.metadata.tables<br/>[table_name]")]
     M --> P["render_index() props"]
     P --> G["GeneratedModulePage.jsx<br/>shared React runtime"]
-    G -.->|"custom page, optional"| W["modulePages.js -> RolesPage.jsx"]
+    G -.->|"custom page, optional"| W["modulePages.js glob<br/>modules/roles/index.jsx"]
 ```
 
 The design splits *what exists* from *what is possible*, and as of

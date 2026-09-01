@@ -34,9 +34,9 @@ admin module as opposed to a future user-generated one, same as in
 
 ```mermaid
 flowchart TB
-    A["browser · click sidebar 'Roles' → /roles"] --> B["App.jsx route '/:modulePath'"]
+    A["browser · click sidebar 'Roles' → /roles"] --> B["App.jsx route '/:modulePath/*'"]
     B --> C["ModuleRoute.jsx · MODULE_PAGES['roles']"]
-    C --> D["RolesPage.jsx (wrapper: renderCell only)"]
+    C --> D["modules/roles/index.jsx (wrapper: renderCell only)"]
     D --> E["GeneratedModulePage.jsx<br/>axios GET /roles?page=1&sort_dir=asc"]
     E --> F["RequireAuthMiddleware<br/>Bearer token or 401"]
     F --> G["api/dynamic.py · module_index"]
@@ -143,7 +143,7 @@ value shown.
 | `default_sort` | `None` → `primary_key` | column used when `?sort_by=` is absent or rejected |
 | `per_page` | `15` | default page size; `?per_page=` overrides it, capped at 100 |
 | `has_created_at` / `has_updated_at` | `False` | whether to stamp timestamps on write |
-| `actions` | all four `True` | capability flags for `view` / `create` / `edit` / `delete` |
+| `actions` | all four `True` | capability flags for `view` / `create` / `edit` / `delete` — **not a closed set**: a module can add its own keys (`"manage_permissions": True`) and gate a [custom action](#custom-actions) with `self.require("manage_permissions")`, the same way the built-in four gate `get_edit` / `post_store` / etc |
 | `custom_row_actions` | `[]` | extra buttons in the row's action column: `[{"label", "icon", "url"}]`. A **static list**, not a function of the row — the React runtime expands `{id}` in `url` per row and applies `visibleWhen` itself |
 | `custom_index_buttons` | `[]` | extra toolbar buttons: `[{"label", "action", "url"}]` |
 | `custom_bulk_actions` | `[]` | extra bulk actions: `[{"label", "value"}]`. `value` must match `^[A-Za-z0-9_-]+$` or the entry is dropped |
@@ -188,6 +188,36 @@ And eight hooks, all no-ops by default, for the module-specific bits:
 | `before_bulk_delete(ids)` / `after_bulk_delete(ids)` | around a bulk delete |
 | `before_bulk_status_update(ids, payload, is_active)` / `after_bulk_status_update(...)` | around a bulk set-active/set-inactive; the `before` hook returns the payload |
 | `handle_custom_bulk_action(ids, name, config)` | reached only for a value the module declared in `custom_bulk_actions`, so an override can switch on `name` without re-checking it |
+
+### The create/update ladder
+
+`generate()`'s output stubs four rungs for `post_store` / `post_update`, each
+strictly more powerful than the last, so a module takes only what it needs
+and inherits the rest — `roles_module.py` uses all four:
+
+| Rung | Override | Runs for |
+|---|---|---|
+| 2 | `validate(data)` | both create and update — business rules a `form_fields` dict cannot state (a uniqueness check, a privilege check). Call `super().validate(data)` first so `required` / `max` still apply |
+| 1 | `before_store(payload)` / `before_update(payload, id)` | shaping the payload on its way into the write. **Must return the payload** — a bare mutation is silently dropped |
+| 1 | `after_store(payload, id)` / `after_update(payload, id)` | side effects once the row has committed. Anything written here needs a commit of its own |
+| 3 | `post_store()` / `post_update()` entirely | the write itself must differ — a second table, a transaction spanning both. Delegate to `super()` rather than retyping the insert, since the base method already runs `validate()` → `payload()` → `before_store()` → stamps → `RETURNING id` → `after_store()`, and every rung above still applies |
+
+`validate()` is shared by both `post_store` and `post_update` — on update,
+`self.body` carries the primary key, so a uniqueness check must exclude the
+current row (`self.table.c[self.primary_key] != self.cast_key(current_id)`)
+or a record collides with itself and can never be saved under its own value.
+
+Overriding rung 3 needs one thing the lower rungs don't: **`@action` has to
+be re-applied**. `dynamic.py` dispatches only on methods carrying
+`__module_action__`, and an override is a new function object, so the base
+class's decorator does not carry over — leave it off and the endpoint
+`404`s, which reads like a missing route rather than a missing decorator.
+
+All of this applies to every write path for the module at once — the
+runtime's built-in panel, a `use_add_route` page, and any custom page under
+`pages/modules/<path>/` — because all three `POST` to the same
+`/<path>/store`. That is the reason to override here rather than add a
+second endpoint for a custom page: two write paths drift, one does not.
 
 ### A module in full
 
@@ -321,6 +351,73 @@ dispatcher's rules hold. Its `not_reachable()` method carries no
 `@action`, so requesting it returns `404` even though the method exists.
 It is a reachability test, not a real Users module.
 
+### Custom actions
+
+A capability outside the built-in four — Roles' "Manage Permissions" is
+the worked example — needs three pieces, all named by the same string so
+none of them is registered anywhere:
+
+1. **A capability flag**, so the endpoint and the button share one gate:
+
+   ```python
+   actions = {"view": True, "create": True, "manage_permissions": True}
+   ```
+
+2. **A button whose `url` is `/<module_path>/<action>/<args…>`** — the
+   exact shape `_method_name()` dispatches on the backend and `ModuleRoute`
+   splits on the frontend, so one convention covers both sides:
+
+   ```python
+   custom_row_actions = [
+       {"label": "Manage Permissions", "action": "manage_permissions",
+        "icon": "pencil", "url": "/roles/edit-permissions/{id}"},
+   ]
+   ```
+
+   The React runtime expands `{id}` per row. Note the action name in the
+   capability flag (`manage_permissions`) need not match the URL segment
+   (`edit-permissions`) — the flag is checked by hand inside the method,
+   the URL segment is what `_method_name()` turns into the method name.
+
+3. **`get_<action>` / `post_<action>`, action hyphens turned to
+   underscores**, each starting with `self.require(...)` since dispatch
+   only checks that the method exists and carries `@action` — it does not
+   check capability flags itself:
+
+   ```python
+   @action
+   def get_edit_permissions(self, record_id=None):
+       self.require("manage_permissions")
+       role = self.find_row(record_id)
+       if role is None:
+           raise HTTPException(status_code=404, detail="Role not found")
+       return {"role": role, "modules": [...], "granted": [...]}
+
+   @action
+   def post_save_permissions(self):
+       self.require("manage_permissions")
+       role_id = self.record_id()   # self.body[primary_key], or a 422
+       ...
+       self.db.commit()
+       return {"success": True, "message": "Permissions updated successfully."}
+   ```
+
+   `record_id` above arrives as a **string** positional argument (URL
+   segments are never coerced) — `find_row()` runs it through `cast_key()`
+   itself, so a module rarely needs to.
+
+A matching file at `pages/modules/<path>/<action>.jsx` — e.g.
+`pages/modules/roles/edit-permissions.jsx` — turns the same URL into a
+custom page instead of the shared runtime; see
+[The React side](#the-react-side) below. It receives `args` as a prop
+from `ModuleRoute`, **not** `useParams()`: the app has a single
+`/:modulePath/*` route, so there is no named `:recordId` param to read.
+`args[0]` is the `7` in `/roles/edit-permissions/7`.
+
+A custom action needs no matching frontend file at all — `get_add` /
+`post_bulk_action` are reached directly by `api.js` calls with no page of
+their own. A file is only for a custom action that needs its own screen.
+
 ## What the frontend receives
 
 `render_index()` is the contract. Everything the React runtime draws
@@ -385,31 +482,37 @@ Three files, and only one of them ever needs editing:
 
 | File | Role |
 |---|---|
-| `pages/ModuleRoute.jsx` | sits behind the module routes, looks the path up in `MODULE_PAGES`, and falls back to the shared runtime. `key={modulePath}` forces a remount so a new module never shows the previous one's rows while loading |
-| `pages/modulePages.js` | `{ roles: RolesPage }` — the only place a module's custom page is named |
+| `pages/ModuleRoute.jsx` | sits behind the single splat route: splits the URL into `modulePath` / `action` / `args`, resolves the page most-specific-first (`roles/edit-permissions` → `roles` → shared runtime), and passes the parts down as props. `key` forces a remount so a new module never shows the previous one's rows while loading |
+| `pages/modulePages.js` | `import.meta.glob("./modules/**/*.jsx", { eager: true })` — **the filesystem is the registry**, so a custom page is named nowhere. `pages/modules/roles/index.jsx` claims `/roles`; `pages/modules/roles/edit-permissions.jsx` claims `/roles/edit-permissions/…`. Same mechanism as the Laravel original's `resources/js/app.jsx` |
 | `pages/admvram/vramjsx/GeneratedModulePage.jsx` | the shared runtime: search box, sortable headers, pager, row rendering. **Do not edit this for one module** |
 
-Three routes in `App.jsx` reach `ModuleRoute`, all rendering the same
-component:
+**One** route in `App.jsx` reaches `ModuleRoute`, and it does not grow:
+`path="/:modulePath/*"`, inside a pathless layout route that declares the
+auth guard and the admin shell once. That splat is this project's answer to
+`CommonHelpers::routeController()`'s `/{one?}/{two?}/{three?}/{four?}/{five?}`
+wildcards — minus the five-segment ceiling.
 
-| Route | Fetches | Why |
+| URL | Fetches | Why |
 |---|---|---|
-| `/:modulePath` | `GET /<path>` | the list |
-| `/:modulePath/:moduleAction` | `GET /<path>/add` when the action is `add` | `use_add_route` |
-| `/:modulePath/:moduleAction/:recordId` | `GET /<path>/edit/<id>` when the action is `edit` | `use_edit_route` |
+| `/<path>` | `GET /<path>` | the list |
+| `/<path>/add` | `GET /<path>/add` | `use_add_route` |
+| `/<path>/edit/<id>` | `GET /<path>/edit/<id>` | `use_edit_route` |
+| `/<path>/<action>/<args…>` | whatever that page fetches | a file at `pages/modules/<path>/<action>.jsx`, e.g. `edit-permissions` |
 
-The two-segment route matters: `/roles/add` matched nothing before it was
-added, so the button fell through to `path="*"` and bounced to
-`/dashboard`. Closing or submitting a panel that was opened by URL
-navigates back to `/<path>`, so the address bar never describes a panel
-that is no longer open.
+The URL shape is deliberately the one `dynamic.py` already dispatches —
+`/<module_path>/<action>/<args…>` — so one convention covers both sides and
+neither side needs a route added per feature. `GeneratedModulePage` reads
+the action and the id off the splat (`params["*"]`), not off named params.
+Closing or submitting a panel that was opened by URL navigates back to
+`/<path>`, so the address bar never describes a panel that is no longer
+open.
 
 The runtime also draws the selection column, the bulk bar and the export
 panel, all from the props above — a module gets them by declaring
 `bulk_actions` and `index_buttons`, with no frontend change.
 
 A wrapper page passes in only what is specific to its module.
-`RolesPage.jsx` passes a single `renderCell` that draws `is_superadmin`
+`modules/roles/index.jsx` passes a single `renderCell` that draws `is_superadmin`
 as a badge and `theme_color` as a swatch, and inherits everything else.
 
 | Prop | Purpose |
@@ -538,8 +641,8 @@ The steps, done by hand:
 
 6. **Frontend: nothing.** `ModuleRoute` falls back to
    `GeneratedModulePage`, so the module is already browsable. Add a
-   wrapper page and a line in `modulePages.js` only when you want custom
-   cell rendering or extra buttons.
+   file at `pages/modules/<path>/index.jsx` only when you want custom cell
+   rendering or extra buttons — the glob picks it up, nothing lists it.
 
 ## Laravel comparison
 
@@ -565,13 +668,13 @@ separately below:
 | Validation rules | Laravel `Validator` rules on the field config | `validate()` reading `required` and `max` out of `form_fields` |
 | Controller resolution | the module row's controller string, resolved by Laravel | `@controller(...)` → the `CONTROLLERS` dict |
 | Reachable methods | Laravel reflects over **public** methods | `@action`, because Python has no `public` keyword |
-| Page resolution | Inertia resolving a controller's `$viewName` to a component | `MODULE_PAGES` in `modulePages.js` |
+| Page resolution | Inertia resolving a controller's `$viewName` to a component | the same `import.meta.glob` the original's `app.jsx` uses, in `modulePages.js` |
 | Shared page runtime | `resources/js/Pages/AdmVram/VramJsx/GeneratedModulePage.jsx` | `pages/admvram/vramjsx/GeneratedModulePage.jsx` — same file, same job |
-| A module's own page | `resources/js/Pages/Roles/Roles.jsx` | `pages/admvram/RolesPage.jsx` |
+| A module's own page | `resources/js/Pages/Roles/Roles.jsx` | `pages/modules/roles/index.jsx` |
 | How props arrive | one Inertia response carrying page and props together | two hops: HTML from Vite, then JSON from `GET /<path>` |
 
 Everything above the last row is either quoted from a comment in
-`generated_module.py` / `modulePages.js` / `RolesPage.jsx` or is stock
+`generated_module.py` / `modulePages.js` / `modules/roles/index.jsx` or is stock
 Laravel/Inertia behaviour. The paths under `resources/js/Pages/` are the
 ones those comments name; nothing else about the Laravel repo is assumed
 here.
