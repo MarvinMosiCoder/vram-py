@@ -50,6 +50,19 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          {/* The route form of create, for useAddRoute: /roles/add.
+              Two segments, so without this it fell through to the
+              catch-all and bounced to /dashboard. */}
+          <Route
+            path="/:modulePath/:moduleAction"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <ModuleRoute />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
           {/* The route form of a row action, for useEditRoute:
               /roles/edit/1. Same component -- GeneratedModulePage reads
               :moduleAction and :recordId and opens its edit panel. Without

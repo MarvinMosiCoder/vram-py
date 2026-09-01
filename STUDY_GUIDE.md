@@ -255,7 +255,7 @@ class RolesController(ModuleController):
 
 That is the entire Roles module. No route, no Pydantic schema, no query,
 no React file. `GET /roles` already returns a searchable, sortable,
-paginated list, because `ModuleController` (in `modules/base.py`) supplies
+paginated list, because `ModuleController` (in `helpers/generated_module.py`) supplies
 `get_index`, `post_store`, `post_update`, and `post_delete`, and
 **inheritance** hands all four to every subclass. This is the Python port
 of the Laravel template's `GeneratedModuleController.php` — the port is
@@ -298,21 +298,31 @@ action marker, table name, argument count, and which columns may be
 sorted/filtered/searched). All seven are tabulated in
 [docs/MODULES.md](docs/MODULES.md#where-the-trust-boundaries-are).
 
-### Registration happens at import time
+### The filesystem is the registry
 
-`modules/__init__.py` is three import lines, and they are not tidiness —
-they *are* the registration:
+There used to be one hand-written import line per controller, because
+importing a file is what runs its `@controller` decorator and Python has no
+autoloader. That list carried no information, and forgetting a line returned
+`500 unregistered controller` while the class sat right there.
 
-```python
-from app.modules import roles_module  # noqa: F401
-```
+`registry.discover()` replaces it — `pkgutil.iter_modules()` is the glob,
+`importlib.import_module()` is the autoload. That is what Laravel gets free
+from PSR-4: `routes/web.php` filters `adm_modules` rows through
+`glob('Controllers/Admin/*.php')` and resolves the class by name. Drop a
+file in `modules/admin/` and it is registered.
 
-Importing the file runs the `@controller` decorator, which puts the class
-in `CONTROLLERS`. In Python, importing a module executes it, top to
-bottom, once. Forget the line and the route returns
-`500 unregistered controller` even though the class exists. Laravel would
-do this with service-provider auto-discovery; here the import list is the
-manifest.
+It is a function called from `api/dynamic.py`, not a loop in the package's
+`__init__`, and that matters: scanning at package-import time would make
+`from app.modules.registry import action` drag in every controller as a side
+effect — and controllers import the base class, which imports the registry,
+so importing the base class first was a circular import.
+
+### And you do not have to write the controller either
+
+`generate()` in `app/modules/admin/module_generator.py` introspects the table
+and writes the file, the way the Laravel template's Modules screen does. It has
+no CLI wrapper — the admin screen is where it gets called from. See
+[docs/MODULES.md](docs/MODULES.md#adding-a-module).
 
 ### What is not finished
 

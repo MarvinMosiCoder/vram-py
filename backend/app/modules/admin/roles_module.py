@@ -1,4 +1,4 @@
-from app.modules.base import ModuleController
+from app.helpers.generated_module import ModuleController
 from app.modules.registry import controller
 
 
@@ -24,7 +24,21 @@ class RolesController(ModuleController):
         "theme_color": {"label": "Theme", "type": "text", "max": 255},
     }
 
+    # A key that is absent is OFF -- is_capable() has no default-true
+    # fallback, so "view" and "create" have to be declared to exist.
     actions = {
-        "edit": {"label": "Edit", "icon": "pencil"},    
-        "delete": {"label": "Delete", "icon": "trash"}
+        "view": True,
+        "create": True,
+        "edit": False,
+        "delete": False,  # Only superadmins can delete roles
     }
+    # A static list, not a function of the row: the React runtime expands
+    # {id} in `url` per row and applies `visibleWhen` itself.
+    custom_row_actions = [
+        {
+            "label": "Manage Permissions",
+            "action": "edit",
+            "icon": "lock",
+            "url": "/admin/roles/{id}/edit-permissions",
+        }
+    ]

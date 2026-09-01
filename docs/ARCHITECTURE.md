@@ -154,7 +154,7 @@ api/dynamic.py (module_index / module_action / module_action_args)
   -> MODULE_PATH_RE guards the path shape
   -> adm_modules row (path, is_active=1) -> its `controller` string
   -> CONTROLLERS[...] -> a ModuleController subclass  [modules/registry.py]
-  -> getattr(instance, "get_index") if marked @action  [modules/base.py]
+  -> getattr(instance, "get_index") if marked @action  [helpers/generated_module.py]
   -> SQLAlchemy Core select() against Base.metadata.tables[table_name]
   -> render_index() returns a plain dict — no Pydantic schema here
 ```
@@ -336,7 +336,7 @@ Role checks happen in **two places**, deliberately:
 The last row is the widest hole in the table and worth stating plainly:
 every dynamic module route is reachable by any logged-in user. A module's
 `actions` flags decide whether create/edit/delete *exist*, not who may
-call them, and `require()` in `modules/base.py` says as much in its own
+call them, and `require()` in `helpers/generated_module.py` says as much in its own
 docstring. Closing it means either `Depends(auth.require_role(...))` on
 the dynamic router or a role consulted inside `require()`.
 
@@ -404,27 +404,36 @@ no React file. `adm_roles` is served this way today, through
 flowchart LR
     R[("adm_modules row<br/>path · table_name · controller")] --> D["api/dynamic.py<br/>3 catch-all routes"]
     D --> C{"CONTROLLERS<br/>registry.py"}
-    C --> M["ModuleController subclass<br/>modules/base.py"]
+    C --> M["ModuleController subclass<br/>helpers/generated_module.py"]
     M --> T[("Base.metadata.tables<br/>[table_name]")]
     M --> P["render_index() props"]
     P --> G["GeneratedModulePage.jsx<br/>shared React runtime"]
     G -.->|"custom page, optional"| W["modulePages.js -> RolesPage.jsx"]
 ```
 
-The design splits *what exists* from *what is possible*. The database
-half is admin-editable: turn a module off, rename it, change its icon,
-reorder it. The code half is not: a `@controller("...")` registration is
-the only way a controller string resolves to a class, and
-`Base.metadata.tables[...]` is the only way a `table_name` resolves to a
-table. So an admin can manage modules without being able to introduce
-behaviour or reach a table nobody declared.
+The design splits *what exists* from *what is possible*, and as of
+2026-09-01 the line sits further over than it used to. The database half
+now carries a module's whole field configuration — `table_fields`,
+`form_fields`, `search_columns`, `actions` and the scalars beside them —
+so a row whose `controller` is empty is a complete, working module with no
+Python file behind it. `DataDrivenModuleController` reads it.
 
-Seven allowlists sit on that boundary — the path regex, the `is_active`
-filter, the `CONTROLLERS` dict, the `@action` marker (Python has no
-`public` keyword, so reachability has to be opt-in per method), the
-metadata table lookup, the signature arity check, and the declared-column
-allowlists behind `?sort_by=`, `?search=`, and `?<column>=`. Each is
-listed with what it blocks in [MODULES.md](MODULES.md).
+The code half is still not admin-editable: `registry.discover()` scanning
+`modules/admin/` is the only way a controller string resolves to a class,
+`Base.metadata.tables[...]` is the only way a `table_name` resolves to a
+table, and `NEVER_EXPOSE` is the only thing that decides whether a column
+may be surfaced at all. So an admin can now introduce a *module* from the
+database, but still not new *behaviour*, not an undeclared table, and not a
+password hash.
+
+Eight allowlists sit on that boundary — the path regex, the `is_active`
+filter, the `CONTROLLERS` dict (now filesystem-derived, same property), the
+`@action` marker (Python has no `public` keyword, so reachability has to be
+opt-in per method), the metadata table lookup, the signature arity check,
+the declared-column allowlists behind `?sort_by=`, `?search=` and
+`?<column>=`, and the `NEVER_EXPOSE` denylist that the declared columns are
+themselves filtered through. Each is listed with what it blocks in
+[MODULES.md](MODULES.md).
 
 Two limits matter for the security model in this document. **Module
 routes have no role check**: `Depends(auth.get_current_user)` means any
@@ -662,7 +671,7 @@ the machinery is unexercised — set the column to `skin-blue`,
 when a value has no hex, so a previous theme's tokens persist. That matches
 the original, and matters only if a theme is ever unset at runtime.
 
-## Configuration notes## Configuration notes
+## Configuration notes
 
 These are hardcoded for local development and called out here so
 they're not missed before deploying anywhere real:

@@ -55,7 +55,7 @@ flowchart TB
 ```
 
 Read the same path in the source in this order:
-`api/dynamic.py` → `modules/registry.py` → `modules/base.py` →
+`api/dynamic.py` → `modules/registry.py` → `helpers/generated_module.py` →
 `modules/roles_module.py`.
 
 ## The three routes
@@ -106,7 +106,7 @@ they work.
 ## Where the trust boundaries are
 
 `adm_modules` is admin-supplied data that reaches a query, and the action
-name comes straight out of the URL. Seven allowlists stand between those
+name comes straight out of the URL. Ten allowlists stand between those
 inputs and the database — worth knowing all of them, because each one is
 load-bearing:
 
@@ -114,11 +114,14 @@ load-bearing:
 |---|---|---|
 | `MODULE_PATH_RE` (`^[a-z0-9_-]+$`) | `dynamic.py` | path traversal, uppercase or unicode lookalikes, and anything containing a `%` or a `.`, before the value touches a query |
 | `is_active == 1` filter | `dynamic.py` | a disabled module, without deleting its row |
-| `CONTROLLERS` dict | `registry.py` | any controller string an admin invents. The dict *is* the allowlist — an unregistered name is a `500`, never a class lookup |
+| `CONTROLLERS` dict | `registry.py` | any controller string an admin invents. The dict *is* the allowlist — an unregistered name is a `500`, never a class lookup. Filled by `registry.discover()` scanning `modules/admin/`, so the **filesystem** is what can add to it |
 | `__module_action__` marker | `registry.py` / `dynamic.py` | an unguarded `getattr()` reaching any attribute on the instance. Python has no `public` keyword, so `@action` is that missing keyword |
 | `inspect.signature().bind()` | `dynamic.py` | an arity mismatch, checked *before* the call so a real `TypeError` raised inside a controller is reported as a bug rather than swallowed into a `404` |
-| `Base.metadata.tables[name]` | `base.py.__init__` | a bad `adm_modules.table_name`. Laravel's `DB::table()` accepts any string; resolving through SQLAlchemy metadata means a typo is a `500` here instead of arbitrary SQL later |
-| Column allowlists | `base.py` | `?sort_by=`, `?<column>=`, and `?search=` are each intersected with the module's *declared* columns, so a hidden column cannot be sorted, filtered, or searched |
+| `Base.metadata.tables[name]` | `generated_module.py.__init__` | a bad `adm_modules.table_name`. Laravel's `DB::table()` accepts any string; resolving through SQLAlchemy metadata means a typo is a `500` here instead of arbitrary SQL later |
+| Column allowlists | `generated_module.py` | `?sort_by=`, `?<column>=`, and `?search=` are each intersected with the module's *declared* columns, so a hidden column cannot be sorted, filtered, or searched |
+| `resolve_column()` | `generated_module.py` | a `join` or `select` naming a table or column that does not exist. Laravel pastes those strings into SQL; here they are looked up in `Base.metadata` and a miss is a `500` at construction time |
+| Export column intersection | `post_export()` | a caller widening the export past the declared fields. `columns` from the request is intersected with `self.selected`, so `"password"` is dropped exactly the way `?password=x` is not a filter |
+| `BULK_ACTION_RE` (`^[A-Za-z0-9_-]+$`) | `post_bulk_action()` | a `bulkAction` name carrying anything that reads as SQL or a path, before it is matched against the built-ins or the module's own list |
 
 One more, easy to miss because it is a *negative* guard: `index_query()`
 selects only the declared columns. Laravel's version does `table.*` and
@@ -141,6 +144,13 @@ value shown.
 | `per_page` | `15` | default page size; `?per_page=` overrides it, capped at 100 |
 | `has_created_at` / `has_updated_at` | `False` | whether to stamp timestamps on write |
 | `actions` | all four `True` | capability flags for `view` / `create` / `edit` / `delete` |
+| `custom_row_actions` | `[]` | extra buttons in the row's action column: `[{"label", "icon", "url"}]`. A **static list**, not a function of the row — the React runtime expands `{id}` in `url` per row and applies `visibleWhen` itself |
+| `custom_index_buttons` | `[]` | extra toolbar buttons: `[{"label", "action", "url"}]` |
+| `custom_bulk_actions` | `[]` | extra bulk actions: `[{"label", "value"}]`. `value` must match `^[A-Za-z0-9_-]+$` or the entry is dropped |
+| `bulk_actions` | `True` | `False` switches the whole bulk toolbar off, and makes `post_bulk_action` a `403` |
+| `index_buttons` | all four `True` | toolbar switches: `add`, `export`, `refresh`, `bulk` |
+| `use_add_route` | `False` | `True` makes **New** navigate to `/<path>/add` instead of opening the panel in place |
+| `use_edit_route` | `False` | `True` makes **edit** navigate to `/<path>/edit/<id>` |
 
 Four actions are inherited by every subclass, so a module that declares
 only the attributes above already has all of them:
@@ -148,19 +158,36 @@ only the attributes above already has all of them:
 | Action | HTTP | Does |
 |---|---|---|
 | `get_index` | `GET /<path>` | query → search → filter → sort → paginate → `render_index()` |
+| `get_add` | `GET /<path>/add` | `require("create")`, then the index props plus `pageMode: "create"` |
+| `get_edit` | `GET /<path>/edit/<id>` | `require("edit")`, then the index props plus `pageMode: "edit"` and `editRow` |
 | `post_store` | `POST /<path>/store` | `require("create")`, validate, insert with `RETURNING`, commit |
 | `post_update` | `POST /<path>/update` | `require("edit")`, validate, update by primary key, commit |
 | `post_delete` | `POST /<path>/delete` | `require("delete")`, delete by primary key, commit |
+| `post_bulk_action` | `POST /<path>/bulk-action` | `delete`, `set_active`, `set_inactive`, or one of the module's own |
+| `post_export` | `POST /<path>/export` | the list query minus pagination, streamed back as CSV or XLSX |
+
+`get_add` and `get_edit` exist so the create/edit panel can be opened by
+URL rather than by click — Laravel's `getAdd()` / `getEdit($id)`. They are
+the index page plus a key or two, which is why `render_index()` takes an
+`extra` dict: one props builder serves all three page modes.
+
+`get_edit`'s `record_id` argument **must** keep its default. `dynamic.py`
+checks arity with `signature().bind()` before dispatching, so without it a
+bare `/<path>/edit` would `404` instead of opening an empty form.
 
 And eight hooks, all no-ops by default, for the module-specific bits:
 
 | Hook | When |
 |---|---|
-| `custom_index_query(stmt)` | after `index_query()`, before search/filter/sort — the place for a join or a scope |
+| `custom_index_query(stmt)` | after `index_query()`, before search/filter/sort — the place for a scope |
 | `index_row(row)` | per row, on the way out — computed or reformatted values |
+| `row_index(row)` | per row, for **presentation**: `{"status": {"label": "Active", "className": "status-badge"}}`. Merged over `global_row_index()` and delivered as the row's `__rowIndex` |
 | `before_store(payload)` / `before_update(payload, id)` | last chance to change what gets written (hash a password, force a default) |
 | `after_store(payload, id)` / `after_update(payload, id)` / `after_delete(id)` | side effects once the commit has happened |
 | `before_delete(id)` | guard or cascade before the row goes |
+| `before_bulk_delete(ids)` / `after_bulk_delete(ids)` | around a bulk delete |
+| `before_bulk_status_update(ids, payload, is_active)` / `after_bulk_status_update(...)` | around a bulk set-active/set-inactive; the `before` hook returns the payload |
+| `handle_custom_bulk_action(ids, name, config)` | reached only for a value the module declared in `custom_bulk_actions`, so an override can switch on `name` without re-checking it |
 
 ### A module in full
 
@@ -191,6 +218,102 @@ class RolesController(ModuleController):
     }
 ```
 
+### Joined columns
+
+A `table_fields` entry usually names a column on the module's own table.
+It can instead point at another one, which is Laravel's
+`applyTableFieldJoin()`:
+
+```python
+table_fields = {
+    "id": {"label": "ID"},
+    "name": {"label": "User"},
+    "role_name": {
+        "label": "Role",
+        "select": "adm_roles.name",
+        "join": {"table": "adm_roles",
+                 "first": "adm_users.id_adm_role",
+                 "second": "adm_roles.id"},
+    },
+}
+```
+
+`type` defaults to `"left"`; `"join"` or `"inner"` gives an inner join.
+The same join declared on three fields still produces **one** `JOIN` —
+deduplicated on `(type, table, first, second)`, as it is upstream.
+
+The alias then behaves exactly like a local column: it can be searched,
+filtered, sorted and exported with no special case anywhere. That is
+because `resolve_fields()` builds one dict, `self.selected` (alias →
+`Column`), and every downstream step reads it.
+
+Where Laravel concatenates table and column names into SQL,
+`resolve_column()` looks them up in `Base.metadata`, so a bad name is a
+`500` at construction time rather than a query the database rejects
+halfway through a request:
+
+```
+500 Module 'users' joins unknown table 'no_such_table'
+500 Module 'users' references unknown column 'adm_roles.nope'
+```
+
+**Status badges.** If a joined table carries `badge_background_color` and
+`badge_text_color`, that field renders as a coloured badge: the two
+colours are selected under private `__badge_*` aliases, turned into
+`__rowIndex` metadata by `global_row_index()`, and dropped from the row
+before it ships. Colours run through `hex_color()`, so anything that is
+not `#RRGGBB` falls back to a default rather than injecting a style.
+Upstream this is hardcoded to a `statuses` table; here it is any joined
+table with those two columns.
+
+### Bulk actions
+
+`POST /<path>/bulk-action`, body `{"selectedIds": [1, 2], "bulkAction": "delete"}`.
+
+| Value | Does | Gated by |
+|---|---|---|
+| `delete` | deletes every selected row in one statement | `require("delete")` |
+| `set_active` / `set_inactive` | writes `is_active` `1`/`0` if the table has it, else `"ACTIVE"`/`"INACTIVE"` into the first declared status column | `require("edit")` |
+| anything else | matched against `custom_bulk_actions` by `value`, then `handle_custom_bulk_action()` | the module's own code |
+
+A status column is one named `status` or `is_active`, or ending in
+`_status`. A table with none of them answers `422` rather than writing
+somewhere unexpected.
+
+An unrecognised `bulkAction` is a `422`, not a silent no-op, so a stale
+button in an open browser tab says so instead of appearing to work.
+
+### Export
+
+`POST /<path>/export`, body `{"fileformat": "csv", "filename": "roles", "limit": 500, "columns": [...]}`.
+
+Runs the same pipeline the list does — `custom_index_query`, search,
+filters, sort — minus pagination, then streams the result as an
+attachment. Requested `columns` are intersected with the declared fields,
+so **export can never widen what the module exposes**: asking for
+`password` drops it silently, the same way `?password=x` is not a filter.
+
+| Format | Status |
+|---|---|
+| `csv` | always available — stdlib `csv`, written UTF-8 with a BOM so Excel reads accents |
+| `xlsx` (or `xls`) | needs `openpyxl`. Without it, `422 XLSX export needs the openpyxl package.` |
+| `pdf` | **not ported.** Upstream uses DomPDF; there is no PDF library in `requirements.txt`, so the format is refused by name rather than silently downgraded |
+
+A cell with `__rowIndex` metadata exports its `label`, not the raw code —
+a spreadsheet should say "Active", not `1`.
+
+### Toolbar buttons
+
+`index_buttons` is the module's toolbar config, ANDed with the caller's
+access by `resolve_index_buttons()` — Laravel's `indexButtons()`:
+
+- `add` follows the **create** privilege
+- `bulk` needs `bulk_actions`, plus something to do (update or delete
+  access, or at least one custom bulk action)
+- `export` and `refresh` are whatever the module declared
+
+So neither half can offer a button whose endpoint would answer `403`.
+
 `users_module.py` is the opposite: it overrides `get_index` with a stub
 and adds `get_edit` / `post_bulk_action`, purely to demonstrate that a
 subclass can bypass the metadata pipeline entirely and that the
@@ -220,6 +343,17 @@ frontend change:
     "theme_color": { "label": "Theme", "type": "text", "max": 255 }
   },
   "actions": { "view": true, "create": true, "edit": true, "delete": true },
+  "moduleAccess": { "view": true, "create": true, "update": true, "delete": true },
+  "tableName": "adm_roles",
+  "customRowActions": [],
+  "customIndexButtons": [],
+  "customBulkActions": [],
+  "bulkActions": true,
+  "indexButtons": { "add": true, "export": true, "refresh": true, "bulk": true },
+  "useAddRoute": false,
+  "useEditRoute": false,
+  "pageMode": null,
+  "editRow": null,
   "rows": [
     { "id": 1, "name": "Super Administrator", "is_superadmin": 1, "theme_color": null }
   ],
@@ -227,10 +361,21 @@ frontend change:
 }
 ```
 
+`actions` and `moduleAccess` are the two halves upstream keeps apart:
+`moduleAccess` is the caller's privileges alone, `actions` is those ANDed
+with the module's own declaration. The React runtime takes both, and the
+stricter of the two wins.
+
+`pageMode` and `editRow` are always present and `null` on the index, so
+the response shape never changes between the three page modes. `GET
+/<path>/add` fills the first; `GET /<path>/edit/<id>` fills both.
+
 Note `columns` is built from every key in `table_fields`, while `rows`
-only carry columns that actually exist on the table — a `table_fields`
-entry naming a column the table doesn't have renders as a header with
-empty cells rather than an error.
+only carry columns that actually exist on the table or resolve through a
+`select` — a `table_fields` entry naming neither renders as a header with
+empty cells rather than an error. A row may also carry `__rowIndex`,
+which is per-cell presentation rather than data; see
+[`row_index`](#the-modulecontroller-contract).
 
 Full parameter and error reference: [api/modules.md](api/modules.md).
 
@@ -240,9 +385,28 @@ Three files, and only one of them ever needs editing:
 
 | File | Role |
 |---|---|
-| `pages/ModuleRoute.jsx` | sits behind the single `/:modulePath` route, looks the path up in `MODULE_PAGES`, and falls back to the shared runtime. `key={modulePath}` forces a remount so a new module never shows the previous one's rows while loading |
+| `pages/ModuleRoute.jsx` | sits behind the module routes, looks the path up in `MODULE_PAGES`, and falls back to the shared runtime. `key={modulePath}` forces a remount so a new module never shows the previous one's rows while loading |
 | `pages/modulePages.js` | `{ roles: RolesPage }` — the only place a module's custom page is named |
 | `pages/admvram/vramjsx/GeneratedModulePage.jsx` | the shared runtime: search box, sortable headers, pager, row rendering. **Do not edit this for one module** |
+
+Three routes in `App.jsx` reach `ModuleRoute`, all rendering the same
+component:
+
+| Route | Fetches | Why |
+|---|---|---|
+| `/:modulePath` | `GET /<path>` | the list |
+| `/:modulePath/:moduleAction` | `GET /<path>/add` when the action is `add` | `use_add_route` |
+| `/:modulePath/:moduleAction/:recordId` | `GET /<path>/edit/<id>` when the action is `edit` | `use_edit_route` |
+
+The two-segment route matters: `/roles/add` matched nothing before it was
+added, so the button fell through to `path="*"` and bounced to
+`/dashboard`. Closing or submitting a panel that was opened by URL
+navigates back to `/<path>`, so the address bar never describes a panel
+that is no longer open.
+
+The runtime also draws the selection column, the bulk bar and the export
+panel, all from the props above — a module gets them by declaring
+`bulk_actions` and `index_buttons`, with no frontend change.
 
 A wrapper page passes in only what is specific to its module.
 `RolesPage.jsx` passes a single `renderCell` that draws `is_superadmin`
@@ -254,39 +418,56 @@ as a badge and `theme_color` as a swatch, and inherits everything else.
 | `title` | overrides the heading, which defaults to the module's `name` |
 | `renderCell(row, column, defaultCell)` | per-cell rendering; the third argument is the runtime's own renderer, so you can special-case one column and defer the rest |
 | `renderBeforeTable(data)` / `renderAfterTable(data)` | inject nodes around the table, given the whole response |
-| `indexButtons` | `[{ label, onClick(reload) }]` — toolbar buttons; each gets `reload` so an action can refresh the table without owning its state |
-| `actions` | capability flags, normalised through a `toBoolean` helper so the backend's `1`/`0`/`"true"` all become real booleans |
+| `indexButtons` | `{ add, export, refresh, bulk }` — toolbar switches. **This used to be an array of `{label, onClick}`; that moved to `customIndexButtons`** so the name matches upstream |
+| `customIndexButtons` | `[{ label, onClick(reload) }]` or `[{ label, action, url, confirm }]`; merged after the server's own |
+| `customIndexButtonHandlers` | `{ [action]: fn(button) }` — named handlers for server-declared toolbar buttons. `export_modal` is built in |
+| `actions` / `moduleAccess` | capability masks, normalised through a `toBoolean` helper so the backend's `1`/`0`/`"true"` all become real booleans |
+| `bulkActions` | `false` switches the bulk toolbar off for this page |
 | `customRowActions` | `[{ label, action, icon, url, method, confirm, payload, visibleWhen, newTab, reload }]` — per-row actions, filtered per row by `visibleWhen` |
 | `customRowActionHandlers` | `{ [action]: fn(button, row) }` — overrides the default URL-based handling for a named action |
+| `useAddRoute` / `useEditRoute` | override the module's declaration for this page. Both default to `undefined`, so the server's flag wins unless a boolean is passed |
+| `renderFormField(name, config, ctx)` | replace one field in the create/edit form; return `undefined` to keep the default input |
+| `renderBeforeForm(ctx)` / `renderAfterForm(ctx)` | inject nodes around the form body |
+| `renderFormActions(ctx)` | extra footer buttons beside Save |
+| `hideDefaultFormSubmit` | drop the built-in Save button, for a form that submits its own way |
+| `buildSubmitPayload(values, ctx)` | reshape what `POST /store` or `/update` receives |
+| `onFormSubmit(ctx)` | take the submit over entirely |
 
-Note `actions` is read from the *prop*, not from `data.actions`, even
-though the backend sends the flags on every index response. Deciding
-which of the two wins is still open.
+**Which mask wins.** Every prop mask is *subtractive*: the server's
+declaration is read the way `require()` reads it, with no default-true
+fallback, and a prop can only take a capability away. That is deliberate —
+the UI must never offer a button the backend would answer `403` to.
 
-### The row-actions column is mid-port
+The form hooks all receive one context object: `{ mode, values, row,
+errors, busy, data, setValue, close, reload, toast }`. That is enough to
+read and drive the panel without a wrapper page owning its state.
 
-An actions column was added to `<tbody>` on 2026-08-31, built from three
-components — `RowActions` (the cluster), `RowAction` (one icon button,
-using `lucide-react`), and `RowData` (a styled `<td>`). It is **pasted
-from the Laravel/Inertia original and not yet adapted**, so it compiles
-but throws on render. Ten identifiers have no definition in this project:
+### The row-actions column
 
-| Missing | Was, in Laravel | Needs, here |
-|---|---|---|
-| `router` (×3) | Inertia's `router` | `useNavigate()` from React Router |
-| `axios` | a global | the shared `api` instance from `src/api.js` |
-| `openView`, `openEdit`, `handleDelete` | modal helpers in the original page | to be written, or dropped for now |
-| `moduleAccess` (×2) | per-module permissions from Inertia shared props | the backend has no equivalent yet — see [Known gaps](#known-gaps) |
-| `useEditRoute` | a page-level flag | a prop or a constant |
-| `handleToast` (×2) | a toast helper | to be written |
-| `resolveTemplate`, `resolvePayload` | helpers for `{id}`-style URL templates | to be written |
+Every row gets an actions cell built from three components — `RowActions`
+(the cluster), `RowAction` (one icon button, using `lucide-react`), and
+`RowData` (a styled `<td>`). It holds up to three built-in buttons —
+view, edit, delete — plus every entry in `customRowActions`.
 
-There is also a **column-count mismatch**: `<thead>` emits one `<th>` per
-declared column, while each `<tbody>` row now emits that many `<td>`s
-*plus* the actions `RowData`, so the header is one cell short.
+A custom row action is a **descriptor**, not a function of the row. The
+runtime does the per-row work itself:
 
-Until those are resolved, a module page with rows will fail with a
-`ReferenceError` rather than render.
+| Key | Effect |
+|---|---|
+| `url` | `{id}` and `:id` are replaced with that row's values by `resolveTemplate()` |
+| `visibleWhen` | `{ "is_superadmin": 0 }` — the button only renders on rows that match |
+| `method` | `"post"` sends `payload` (templated the same way) through the shared `api` instance and reloads |
+| `confirm` | templated too, shown via `window.confirm` before anything happens |
+| `newTab` | opens the resolved URL in a new tab instead of navigating |
+| `action` | looked up in `customRowActionHandlers` first, so a page can take one over |
+
+A `url` with no `method` goes through React Router's `navigate()`, **not
+the API** — so it has to match a route in `App.jsx` or it falls through
+to the catch-all and lands on `/dashboard`.
+
+The header mirrors the body cell for cell, actions and selection columns
+included, so the two never drift apart.
+
 
 ## Adding a module
 
@@ -299,6 +480,21 @@ added by hand — and a freshly migrated database has no modules at all.
 Extending `seed.py` to insert the built-in module and menu rows is
 probably the single highest-value change to make here.
 
+Steps 1 to 3 can be generated rather than typed.
+`app/modules/admin/module_generator.py` exposes `generate()`, the counterpart
+of clicking *Add Module* in the Laravel template's Modules screen: it
+introspects `adm_admin_menuses` through SQLAlchemy — columns, types,
+nullability, defaults, primary key — writes
+`app/modules/admin/menus_module.py` with that metadata as **editable
+literals**, and inserts the `adm_modules` row.
+
+There is no command-line wrapper around it; the Modules admin screen is where
+it is meant to be called from. The generated file is ordinary code either way:
+open it and delete a column, retype a label, add a hook. Generating is a
+starting point, not a constraint.
+
+The steps, done by hand:
+
 1. **Insert the `adm_modules` row.**
 
    ```sql
@@ -306,20 +502,21 @@ probably the single highest-value change to make here.
    VALUES ('Menus', 'fa fa-bars', 'menus', 'adm_admin_menuses', 'MenusController', 1, 1);
    ```
 
-2. **Write the controller** as `backend/app/modules/menus_module.py`,
+2. **Write the controller** as `backend/app/modules/admin/menus_module.py`,
    declaring `table_fields`, `form_fields`, and `search_columns`. The
    `@controller("MenusController")` string must match the `controller`
    column exactly.
 
-3. **Register it** by adding one import to `modules/__init__.py`:
+3. **Nothing.** There is no registration step. `registry.discover()`
+   scans `modules/admin/` and imports every file it finds, so dropping the
+   file in the folder is what runs its `@controller` decorator. There used
+   to be a hand-written import line per controller; it carried no
+   information and is gone.
 
-   ```python
-   from app.modules import menus_module  # noqa: F401
-   ```
-
-   The import is not decoration — importing the file is what runs the
-   `@controller` decorator and puts the class in `CONTROLLERS`. Skip this
-   and the route returns `500 unregistered controller`.
+   This is what Laravel gets from PSR-4 — `routes/web.php` filters
+   `adm_modules` rows through `glob('Controllers/Admin/*.php')` and resolves
+   the class by name. `iter_modules` is the glob; `import_module` is the
+   autoload.
 
 4. **Add the sidebar row**, and make `slug` match `adm_modules.path`:
 
@@ -328,16 +525,16 @@ probably the single highest-value change to make here.
    VALUES ('Menus', 'menus', 'menus', 'fa fa-bars', 1, 2);
    ```
 
-   This is the sharpest footgun in the system. `Sidebar.jsx` builds its
+   This is the sharpest footgun in the system. `AppSidebar.jsx` builds its
    link from the row's **`slug`** in `adm_admin_menuses`, while
    `dynamic.py` resolves the module by **`path`** in `adm_modules`. The
    two tables have no foreign key between them and nothing validates the
    pair, so a mismatched `slug` produces a sidebar link that 404s with
    both rows looking perfectly correct.
 
-5. **Restart uvicorn.** `--reload` picks up the new file, but the
-   `adm_modules` row is read per request, so changing a row needs no
-   restart at all.
+5. **Restart uvicorn** if it is not already watching the folder.
+   `--reload` picks up the new file, and the `adm_modules` row is read per
+   request, so changing a row needs no restart at all.
 
 6. **Frontend: nothing.** `ModuleRoute` falls back to
    `GeneratedModulePage`, so the module is already browsable. Add a
@@ -346,16 +543,22 @@ probably the single highest-value change to make here.
 
 ## Laravel comparison
 
-The Python is a port, and `base.py`'s own comments name the Laravel
+The Python is a port, and `generated_module.py`'s own comments name the Laravel
 methods it is standing in for. Mapping, with the divergences called out
 separately below:
 
 | Concept | Laravel template | This project |
 |---|---|---|
-| The shared CRUD engine | `app/Helpers/GeneratedModuleController.php` | `app/modules/base.py` — `ModuleController` |
-| Field config normalising | `normalizeFieldConfiguration()` | `ModuleController.__init__` derives `columns`, `column_labels`, `form_columns` once |
-| Index props | `renderIndex()` | `render_index()` |
-| Sort allowlist | `sortColumn()` | `order_by()` |
+| The shared CRUD engine | `app/Helpers/GeneratedModuleController.php` | `app/helpers/generated_module.py` — `ModuleController` |
+| Field config normalising | `normalizeFieldConfiguration()` | `resolve_fields()` derives `selected`, `joins`, `badge_fields`; `__init__` derives `column_labels` and `form_columns` |
+| Index props | `renderIndex($rows, $extra)` | `render_index(paginated, extra=None)` |
+| Sort allowlist | `sortColumn()` / `sortableColumns()` | `order_by()` / `sortable_columns()` |
+| Create / edit by URL | `getAdd()` / `getEdit($id)` | `get_add()` / `get_edit(record_id=None)` |
+| Joined table fields | `applyTableFieldJoin()` | `apply_join()` + `resolve_column()`, through `Base.metadata` |
+| Cell presentation | `globalRowIndex()` + `rowIndex()` | `global_row_index()` + `row_index()`, merged into `__rowIndex` |
+| Bulk actions | `postBulkAction()` | `post_bulk_action()` |
+| Export | `postExport()` + `GeneratedModuleExport.php` (Maatwebsite Excel, DomPDF) | `post_export()` + stdlib `csv`, optional `openpyxl`. No PDF |
+| Toolbar config | `indexButtons()` | `resolve_index_buttons()` |
 | Write permission checks | `CommonHelpers::isCreate()` / `isUpdate()` / `isDelete()` | `require("create")` / `require("edit")` / `require("delete")` |
 | Table access | `DB::table($module->table_name)` | `Base.metadata.tables[name]` lookup |
 | Insert and get id | `insertGetId()` | Postgres `RETURNING` in one statement |
@@ -368,7 +571,7 @@ separately below:
 | How props arrive | one Inertia response carrying page and props together | two hops: HTML from Vite, then JSON from `GET /<path>` |
 
 Everything above the last row is either quoted from a comment in
-`base.py` / `modulePages.js` / `RolesPage.jsx` or is stock
+`generated_module.py` / `modulePages.js` / `RolesPage.jsx` or is stock
 Laravel/Inertia behaviour. The paths under `resources/js/Pages/` are the
 ones those comments name; nothing else about the Laravel repo is assumed
 here.
@@ -412,18 +615,18 @@ Read this section before treating the module system as finished.
   one keyword per call site, `body=await _read_body(request)`. Verified
   against the running API: `store` (with `create` enabled), `update`,
   `delete`, and a `422` on a missing required field all behave.
-- **No create or edit UI exists.** `GeneratedModulePage` only issues a
-  `GET`; `formFields` is delivered to the browser and currently unused.
-- **The row-actions column throws.** It is rendered but references ten
-  identifiers that do not exist in this project, most of them Inertia
-  APIs — see [above](#the-row-actions-column-is-mid-port). Its header row
-  is also one cell short of its body rows.
-- **No per-module permissions.** The pasted column expects a
-  `moduleAccess` object with `update` / `delete` flags. Nothing on the
-  backend produces one: `render_index()` sends the module's `actions`
-  flags, which are the same for every caller. A real `moduleAccess` needs
-  role-aware capabilities, which is the same gap as "`require()` is not
-  authorization" above.
+- **`moduleAccess` is not yet role-aware.** `render_index()` does send
+  it now, but `common_helpers._privilege()` has no privilege table to
+  read, so `PRIVILEGES_DEFAULT` (currently `True`) decides the answer for
+  every non-superadmin. The prop is wired end to end; what is missing is
+  the data behind it. Flipping that one constant to `False` makes every
+  module write superadmin-only the moment the tables land.
+- **PDF export is not ported.** `csv` always works and `xlsx` works with
+  `openpyxl` installed; `pdf` answers `422`. Upstream uses DomPDF, and
+  nothing equivalent is in `requirements.txt`.
+- **Bulk actions have no row-level scoping either.** `selectedIds` is
+  trusted as a list of primary keys; the only check is the module's
+  capability flag, the same as every other write.
 - **`require()` is not authorization.** It enforces the module's own
   `actions` flags, which are the same for every caller. There is no
   per-role check on any module route — a valid token is enough. Real

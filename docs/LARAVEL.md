@@ -44,7 +44,7 @@ an inference rather than something the code states, it says so.
 | ORM model | `app/Models/User.php` (Eloquent) | `app/models/user.py` (SQLAlchemy declarative) | looks similar, behaves differently — see "Eloquent is not SQLAlchemy" |
 | Columns | inferred from the table at runtime | declared explicitly as `Column(...)` | Eloquent reads the schema; SQLAlchemy is told. A column missing from the model is invisible to the app |
 | Save | `$user->save()` | `db.add(user)` then `db.commit()` | the commit is yours to call, and it commits the whole session, not one row |
-| Query | `User::where(...)->get()` | `db.query(models.User).filter(...).all()` | note both SQLAlchemy styles are in this repo: the classic `db.query(...)` in `api/`, and the 2.0 `select(...)` style in `modules/base.py` |
+| Query | `User::where(...)->get()` | `db.query(models.User).filter(...).all()` | note both SQLAlchemy styles are in this repo: the classic `db.query(...)` in `api/`, and the 2.0 `select(...)` style in `helpers/generated_module.py` |
 | Relations | `hasMany` / `belongsTo` methods | `relationship("User", back_populates="role")` | the related class is named as a **string**, which is how two model files link without importing each other |
 | Eager loading | `with('role')` | none configured | `user.role` lazy-loads on access inside the session; there is no N+1 guard |
 | Migrations | `php artisan make:migration`, `php artisan migrate` | `alembic revision --autogenerate -m "..."`, `alembic upgrade head` | see [MIGRATIONS.md](MIGRATIONS.md). `--autogenerate` diffs the models against the live database, which `make:migration` does not do |
@@ -114,7 +114,7 @@ Four differences in there actually bite:
   connection" the way Eloquent has one, so anything touching the database
   must be handed a session.
 - **No model events, observers, or global scopes.** Nothing fires on
-  save. The `before_store` / `after_store` hooks in `modules/base.py`
+  save. The `before_store` / `after_store` hooks in `helpers/generated_module.py`
   exist precisely because there is no `booted()` to hook into.
 - **The middleware runs before the dependency chain**, so an invalid
   token is rejected without ever opening a route's session. The
@@ -192,7 +192,7 @@ import list is the manifest. Forget the line and the module 500s with
 
 ## The module system, in Laravel terms
 
-The centrepiece of the port. `app/modules/base.py` is the Python
+The centrepiece of the port. `app/helpers/generated_module.py` is the Python
 counterpart of the Laravel template's
 `app/Helpers/GeneratedModuleController.php`: a row in `adm_modules` names
 a controller class, the class declares `table_fields` and `form_fields`,
@@ -222,7 +222,7 @@ find:
   decides who may call a route.
 - **Soft deletes, timestamps, casts, accessors.** All manual — hence
   `has_created_at` / `has_updated_at` flags and `index_row()` in
-  `modules/base.py`.
+  `helpers/generated_module.py`.
 - **Factories and a test harness.** There are no tests in this repo, and
   no `phpunit`/`pest` equivalent wired up.
 - **CSRF.** Genuinely not needed with a bearer token, but worth knowing

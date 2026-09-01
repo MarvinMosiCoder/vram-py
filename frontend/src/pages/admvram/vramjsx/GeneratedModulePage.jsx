@@ -35,7 +35,41 @@ import InputError from "../../../components/form/InputError";
 // reload is just load(), and requests go through the shared api instance so
 // they carry the bearer token. See docs/MODULES.md.
 
-const defaultCell = (row, column) => String(row[column.key] ?? "—");
+// __rowIndex is the backend's per-cell presentation -- Laravel's rowIndex()
+// merged over globalRowIndex(): {label, className, style}. Only `label` is
+// required, and a column without an entry renders exactly as before.
+const cellMeta = (row, column) => row?.__rowIndex?.[column.key];
+
+const defaultCell = (row, column) => {
+  const meta = cellMeta(row, column);
+  if (meta && typeof meta === "object") {
+    const label = String(meta.label ?? row[column.key] ?? "—");
+    if (meta.className || meta.style) {
+      return (
+        <span className={meta.className || undefined} style={meta.style || undefined}>
+          {label}
+        </span>
+      );
+    }
+    return label;
+  }
+  return String(row[column.key] ?? "—");
+};
+
+// Laravel's downloadResponse(): turn a blob response into a saved file.
+// Content-Disposition names it when the server sent one.
+const downloadBlob = (response, fallbackName) => {
+  const disposition = response.headers?.["content-disposition"] || "";
+  const match = /filename="?([^"]+)"?/.exec(disposition);
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", match ? match[1] : fallbackName);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
 
 // Hoisted: these are pure, and rebuilding them per render was pointless.
 const toBoolean = (value, fallback = false) => {
@@ -115,17 +149,35 @@ export default function GeneratedModulePage({
   renderCell,          // (row, column, defaultCell) => node
   renderBeforeTable,   // (data) => node
   renderAfterTable,    // (data) => node
-  indexButtons = [],   // [{ label, onClick(reload) }]
+  // Toolbar switches: { add, export, refresh, bulk }. Like the action masks
+  // these can only turn a button OFF -- the server's config decides the rest.
+  indexButtons,
+  customIndexButtons = [],  // [{ label, onClick(reload) }] or [{ label, action, url }]
+  customIndexButtonHandlers = {},
+  bulkActions,         // false switches the whole bulk toolbar off client-side
   actions,             // client-side mask: { view, create, edit, delete }
   moduleAccess,        // client-side mask: { view, create, update, delete }
   customRowActions,    // [{ label, action, url, method, confirm, payload, visibleWhen, newTab, reload }]
   customRowActionHandlers = {},
-  useEditRoute = false, // edit navigates to /<path>/edit/<id> instead of opening the panel
+  // Both default to undefined so the module's own declaration wins. Pass a
+  // boolean only to override it for this page.
+  useAddRoute,         // "New" navigates to /<path>/add instead of opening the panel
+  useEditRoute,        // edit navigates to /<path>/edit/<id> instead of opening the panel
+  // --- Custom create/edit: reshape the form without touching this file ---
+  renderFormField,     // (name, config, ctx) => node -- undefined keeps the default input
+  renderBeforeForm,    // (ctx) => node
+  renderAfterForm,     // (ctx) => node
+  renderFormActions,   // (ctx) => node -- extra footer buttons
+  hideDefaultFormSubmit = false,
+  buildSubmitPayload,  // (values, ctx) => object -- what /store or /update receives
+  onFormSubmit,        // (ctx) => void -- take the submit over entirely
   onToast,             // (message, status) => void -- opt out of the built-in toast
 }) {
   const params = useParams();
   const navigate = useNavigate();
   const path = modulePath ?? params.modulePath;
+  const routeAction = params.moduleAction;   // "add" | "edit" | undefined
+  const recordId = params.recordId;
 
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -135,6 +187,11 @@ export default function GeneratedModulePage({
   const [sort, setSort] = useState({ by: null, dir: "asc" });
   const [toast, setToast] = useState(null);
   const [panel, setPanel] = useState(null);      // { mode, row, values, errors, busy }
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [showExport, setShowExport] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportForm, setExportForm] = useState({ filename: "", fileformat: "csv", limit: "" });
 
   const accessMask = booleanMap(moduleAccess, { view: true, create: true, update: true, delete: true });
   const actionMask = booleanMap(actions, { view: true, create: true, edit: true, delete: true });
@@ -164,9 +221,17 @@ export default function GeneratedModulePage({
       setLoading(false);
       return;
     }
+    // /<path>/add and /<path>/edit/<id> return the same index props plus a
+    // pageMode, so the page opens in the right mode on first paint. That is
+    // Laravel's getAdd() / getEdit($id).
+    const endpoint =
+      routeAction === "add" ? `/${path}/add`
+      : routeAction === "edit" && recordId ? `/${path}/edit/${recordId}`
+      : `/${path}`;
+
     setLoading(true);
     api
-      .get(`/${path}`, {
+      .get(endpoint, {
         params: {
           search: search || undefined,
           page,
@@ -186,7 +251,7 @@ export default function GeneratedModulePage({
         )
       )
       .finally(() => setLoading(false));
-  }, [path, search, page, sort]);
+  }, [path, search, page, sort, routeAction, recordId]);
 
   useEffect(() => {
     load();
@@ -196,6 +261,12 @@ export default function GeneratedModulePage({
   useEffect(() => {
     setPage(1);
   }, [path, search]);
+
+  // Selection is per page of results: keeping ids across a page change would
+  // act on rows the user can no longer see.
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [path, search, page]);
 
   const formFields = useMemo(() => data?.formFields ?? {}, [data]);
 
@@ -212,17 +283,22 @@ export default function GeneratedModulePage({
   const openView = (row) => setPanel({ mode: "view", row, values: rowValues(row), errors: {} });
   const openEdit = (row) => setPanel({ mode: "edit", row, values: rowValues(row), errors: {} });
   const openCreate = () => setPanel({ mode: "create", row: null, values: blankValues(), errors: {} });
-  const closePanel = () => setPanel(null);
+  const closePanel = () => {
+    setPanel(null);
+    // Opened by URL? Go back to the list, so the address bar stops
+    // describing a panel that is no longer open.
+    if (routeAction) navigate(`/${path}`);
+  };
 
-  // /<path>/edit/<id> -- the route form of edit, for useEditRoute. The record
-  // has to be on the page that just loaded; paging to it is not implemented.
+  // Laravel's effect on [pageMode, editRow]. The server picks the mode and
+  // fetches the record, so unlike the version this replaces it no longer
+  // needs the row to happen to be on the page that just loaded.
   useEffect(() => {
-    if (!data || params.moduleAction !== "edit" || !params.recordId) return;
-    const match = data.rows.find((r) => String(r[data.primaryKey]) === String(params.recordId));
-    if (match) openEdit(match);
-    else handleToast(`Record ${params.recordId} is not on this page.`, "danger");
+    if (!data) return;
+    if (data.pageMode === "create") openCreate();
+    else if (data.pageMode === "edit" && data.editRow) openEdit(data.editRow);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, params.moduleAction, params.recordId]);
+  }, [data?.pageMode, data?.editRow]);
 
   const toggleSort = (key) =>
     setSort((prev) =>
@@ -245,11 +321,33 @@ export default function GeneratedModulePage({
     return fallback;
   };
 
+  // Handed to every custom-form hook, so a wrapper page can read and drive
+  // the panel without owning its state.
+  const formContext = panel && {
+    mode: panel.mode,
+    values: panel.values,
+    row: panel.row,
+    errors: panel.errors,
+    busy: panel.busy,
+    data,
+    setValue: (name, value) =>
+      setPanel((p) => ({ ...p, values: { ...p.values, [name]: value } })),
+    close: closePanel,
+    reload: load,
+    toast: handleToast,
+  };
+
   const submitPanel = async (event) => {
     event.preventDefault();
     if (!panel || panel.mode === "view") return;
+
+    // A wrapper page can own the submit entirely -- Laravel's onFormSubmit.
+    if (onFormSubmit) return onFormSubmit(formContext);
+
     const isCreate = panel.mode === "create";
-    const body = { ...panel.values };
+    const body = buildSubmitPayload
+      ? buildSubmitPayload(panel.values, formContext)
+      : { ...panel.values };
     if (!isCreate) body[data.primaryKey] = panel.row[data.primaryKey];
 
     setPanel((p) => ({ ...p, busy: true, errors: {} }));
@@ -257,7 +355,9 @@ export default function GeneratedModulePage({
       const res = await api.post(`/${path}/${isCreate ? "store" : "update"}`, body);
       handleToast(res.data?.message || (isCreate ? "Data saved." : "Data updated."), res.data?.status || "success");
       setPanel(null);
-      load();
+      // Re-fetching /add or /edit/<id> would only reopen the panel.
+      if (routeAction) navigate(`/${path}`);
+      else load();
     } catch (err) {
       setPanel((p) => ({ ...p, busy: false, errors: errorsFrom(err) }));
       handleToast(messageFrom(err, isCreate ? "Could not save." : "Could not update."), "danger");
@@ -274,6 +374,86 @@ export default function GeneratedModulePage({
     } catch (err) {
       handleToast(messageFrom(err, "Could not delete."), "danger");
     }
+  };
+
+  const toggleRow = (id) =>
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]
+    );
+
+  const toggleAll = (ids) =>
+    setSelectedIds((prev) => (ids.every((id) => prev.includes(id)) ? [] : ids));
+
+  const handleBulkAction = async (value) => {
+    if (!selectedIds.length) {
+      handleToast("Nothing selected.", "danger");
+      return;
+    }
+    const option = bulkOptions.find((entry) => entry.value === value);
+    const title = option?.confirmTitle || option?.label || "Apply this action";
+    if (!window.confirm(`${title}: ${selectedIds.length} selected record(s)?`)) return;
+
+    setBulkBusy(true);
+    try {
+      const res = await api.post(`/${path}/bulk-action`, { selectedIds, bulkAction: value });
+      handleToast(res.data?.message || "Done.", res.data?.status || "success");
+      setSelectedIds([]);
+      load();
+    } catch (err) {
+      handleToast(messageFrom(err, "Bulk action failed."), "danger");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  // responseType "blob" means an error body arrives as a Blob too, so the
+  // message has to be read back out of it before it can be shown.
+  const blobMessage = async (err, fallback) => {
+    try {
+      const text = await err.response?.data?.text?.();
+      const detail = text ? JSON.parse(text)?.detail : null;
+      if (typeof detail === "string") return detail;
+    } catch {
+      /* not JSON -- fall through */
+    }
+    return fallback;
+  };
+
+  const handleExport = async (event) => {
+    event.preventDefault();
+    const name = exportForm.filename || data.tableName || path;
+    setExportBusy(true);
+    try {
+      const res = await api.post(
+        `/${path}/export`,
+        {
+          fileformat: exportForm.fileformat,
+          filename: name,
+          limit: exportForm.limit ? Number(exportForm.limit) : null,
+          columns: data.columns.map((column) => column.key),
+        },
+        { responseType: "blob" }
+      );
+      downloadBlob(res, `${name}.${exportForm.fileformat === "csv" ? "csv" : "xlsx"}`);
+      setShowExport(false);
+    } catch (err) {
+      handleToast(await blobMessage(err, "Export failed."), "danger");
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  const handleCustomIndexButton = (button) => {
+    // A prop button carries its own onClick; a server one is a descriptor.
+    if (typeof button.onClick === "function") return button.onClick(load);
+
+    const name = String(button.action || "").toLowerCase();
+    if (name === "export_modal") return setShowExport(true);
+    if (typeof customIndexButtonHandlers[name] === "function") {
+      return customIndexButtonHandlers[name](button);
+    }
+    if (button.confirm && !window.confirm(button.confirm)) return;
+    if (button.url) navigate(button.url);
   };
 
   const rowActionIsVisible = (button, row) => {
@@ -331,7 +511,18 @@ export default function GeneratedModulePage({
 
   const { columns, rows, pagination, primaryKey } = data;
   const cell = renderCell ?? defaultCell;
-  const buttons = customRowActions || [];
+  // Prop first so a wrapper page can override, then the server's
+  // declaration. Array-guarded: render_index() ships a list, but a bad
+  // value would otherwise reach .filter() below as a hard crash.
+  const buttons = Array.isArray(customRowActions)
+    ? customRowActions
+    : Array.isArray(data.customRowActions)
+      ? data.customRowActions
+      : [];
+
+  // Prop overrides when given, otherwise the module's own declaration.
+  const addRoute = useAddRoute ?? data.useAddRoute ?? false;
+  const editRoute = useEditRoute ?? data.useEditRoute ?? false;
 
   // The server's declaration is the real answer -- read exactly the way
   // require() reads it, with no default-true fallback, so the UI never offers
@@ -355,6 +546,51 @@ export default function GeneratedModulePage({
     edit: descriptor(data.actions?.edit),
     delete: descriptor(data.actions?.delete),
   };
+  // indexButtons() upstream: the module's toolbar config, already ANDed with
+  // the caller's privileges by the backend. The prop can only take a button
+  // away, never add one -- the same rule the action masks follow.
+  const buttonDefaults = { add: true, export: true, refresh: true, bulk: true };
+  const serverButtons = booleanMap(data.indexButtons, buttonDefaults);
+  const buttonOverride = booleanMap(indexButtons, buttonDefaults);
+  const showButton = {
+    add: serverButtons.add && buttonOverride.add,
+    export: serverButtons.export && buttonOverride.export,
+    refresh: serverButtons.refresh && buttonOverride.refresh,
+    bulk: serverButtons.bulk && buttonOverride.bulk,
+  };
+
+  // Mirrors statusColumns() on the backend, so SET ACTIVE only appears when
+  // post_bulk_action would actually find a column to write.
+  const hasStatusColumn = Object.keys(data.formFields || {}).some(
+    (name) => name === "status" || name === "is_active" || name.endsWith("_status")
+  );
+  const bulkEnabled =
+    showButton.bulk && toBoolean(data.bulkActions, true) && toBoolean(bulkActions, true);
+  const bulkOptions = !bulkEnabled
+    ? []
+    : [
+        ...(hasStatusColumn && can.edit
+          ? [
+              { value: "set_active", label: "Set active", confirmTitle: "Set to active" },
+              { value: "set_inactive", label: "Set inactive", confirmTitle: "Set to inactive" },
+            ]
+          : []),
+        ...(can.delete
+          ? [{ value: "delete", label: "Delete selected", confirmTitle: "Delete selected" }]
+          : []),
+        ...(Array.isArray(data.customBulkActions) ? data.customBulkActions : []),
+      ];
+
+  const rowIds = rows.map((row) => row[primaryKey]);
+  const allSelected = rowIds.length > 0 && rowIds.every((id) => selectedIds.includes(id));
+  const showSelection = bulkOptions.length > 0;
+
+  // Server-declared buttons first, then any this page passed in.
+  const toolbarButtons = [
+    ...(Array.isArray(data.customIndexButtons) ? data.customIndexButtons : []),
+    ...customIndexButtons,
+  ];
+
   const hasRowActions = can.view || can.edit || can.delete || buttons.length > 0;
   const fieldEntries = Object.entries(formFields);
 
@@ -371,15 +607,91 @@ export default function GeneratedModulePage({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        {can.create && fieldEntries.length > 0 && (
-          <SecondaryButton onClick={openCreate}>New</SecondaryButton>
+        {showButton.refresh && (
+          <SecondaryButton onClick={() => load()}>Refresh</SecondaryButton>
         )}
-        {indexButtons.map((button) => (
-          <SecondaryButton key={button.label} onClick={() => button.onClick(load)}>
+        {showButton.export && (
+          <SecondaryButton onClick={() => setShowExport(true)}>Export</SecondaryButton>
+        )}
+        {showButton.add && can.create && fieldEntries.length > 0 && (
+          <SecondaryButton onClick={() => (addRoute ? navigate(`/${path}/add`) : openCreate())}>
+            New
+          </SecondaryButton>
+        )}
+        {toolbarButtons.map((button, index) => (
+          <SecondaryButton
+            key={`${button.label || button.action || "index-button"}-${index}`}
+            onClick={() => handleCustomIndexButton(button)}
+          >
             {button.label}
           </SecondaryButton>
         ))}
       </TopPanel>
+
+      {showExport && (
+        <ContentPanel
+          className="is-inset"
+          as="form"
+          onSubmit={handleExport}
+          onClose={() => setShowExport(false)}
+          title="Export"
+          footer={
+            <PrimaryButton type="submit" disabled={exportBusy}>
+              {exportBusy ? "Exporting…" : "Download"}
+            </PrimaryButton>
+          }
+        >
+          <div className="form-grid">
+            <label className="form-field">
+              <InputLabel value="File name" />
+              <TextInput
+                value={exportForm.filename}
+                placeholder={data.tableName || path}
+                onChange={(e) => setExportForm({ ...exportForm, filename: e.target.value })}
+              />
+            </label>
+            <label className="form-field">
+              <InputLabel value="Format" />
+              <SelectInput
+                value={exportForm.fileformat}
+                options={[
+                  { value: "csv", label: "CSV" },
+                  { value: "xlsx", label: "Excel (xlsx)" },
+                ]}
+                onChange={(e) => setExportForm({ ...exportForm, fileformat: e.target.value })}
+              />
+            </label>
+            <label className="form-field">
+              <InputLabel value="Row limit" />
+              <TextInput
+                type="number"
+                value={exportForm.limit}
+                placeholder="All rows"
+                onChange={(e) => setExportForm({ ...exportForm, limit: e.target.value })}
+              />
+            </label>
+          </div>
+          <p className="muted">
+            The current search, filters and sort order are applied to the export.
+          </p>
+        </ContentPanel>
+      )}
+
+      {showSelection && selectedIds.length > 0 && (
+        <div className="module-bulkbar">
+          <span className="muted">{selectedIds.length} selected</span>
+          {bulkOptions.map((option) => (
+            <SecondaryButton
+              key={option.value}
+              disabled={bulkBusy}
+              onClick={() => handleBulkAction(option.value)}
+            >
+              {option.label}
+            </SecondaryButton>
+          ))}
+          <SecondaryButton onClick={() => setSelectedIds([])}>Clear</SecondaryButton>
+        </div>
+      )}
 
       {panel && (
         <ContentPanel
@@ -394,17 +706,29 @@ export default function GeneratedModulePage({
           }
           footer={
             panel.mode !== "view" && fieldEntries.length > 0 ? (
-              <PrimaryButton type="submit" disabled={panel.busy}>
-                {panel.busy ? "Saving…" : panel.mode === "create" ? "Create" : "Save"}
-              </PrimaryButton>
+              <>
+                {renderFormActions?.(formContext)}
+                {!hideDefaultFormSubmit && (
+                  <PrimaryButton type="submit" disabled={panel.busy}>
+                    {panel.busy ? "Saving…" : panel.mode === "create" ? "Create" : "Save"}
+                  </PrimaryButton>
+                )}
+              </>
             ) : null
           }
         >
+          {renderBeforeForm?.(formContext)}
+
           {fieldEntries.length === 0 ? (
             <p className="muted">This module declares no form fields.</p>
           ) : (
             <div className="form-grid">
               {fieldEntries.map(([name, config]) => {
+                // A wrapper page may replace any single field; returning
+                // undefined falls through to the default input below.
+                const custom = renderFormField?.(name, config, formContext);
+                if (custom !== undefined) return <div key={name}>{custom}</div>;
+
                 const value = panel.values[name];
                 const readOnly = panel.mode === "view";
                 const onChange = (next) =>
@@ -438,6 +762,8 @@ export default function GeneratedModulePage({
               })}
             </div>
           )}
+
+          {renderAfterForm?.(formContext)}
         </ContentPanel>
       )}
 
@@ -449,6 +775,11 @@ export default function GeneratedModulePage({
           <TableRow>
             {/* Must mirror the body cells below, actions column included, or
                 every header sits one column to the left of its data. */}
+            {showSelection && (
+              <HeadData center width="1%">
+                <Checkbox checked={allSelected} onChange={() => toggleAll(rowIds)} />
+              </HeadData>
+            )}
             {hasRowActions && <HeadData center width="1%">Actions</HeadData>}
             {columns.map((column) => (
               <HeadData
@@ -466,11 +797,19 @@ export default function GeneratedModulePage({
         <TableBody>
           {rows.map((row) => (
             <TableRow key={row[primaryKey]}>
+              {showSelection && (
+                <RowData center>
+                  <Checkbox
+                    checked={selectedIds.includes(row[primaryKey])}
+                    onChange={() => toggleRow(row[primaryKey])}
+                  />
+                </RowData>
+              )}
               {hasRowActions && (
                 <RowData center>
                   <RowActions>
                     {can.view && <RowAction type="button" action="view" icon={meta.view.icon} title={meta.view.label} onClick={() => openView(row)} />}
-                    {can.edit && <RowAction type="button" action="edit" icon={meta.edit.icon} title={meta.edit.label} onClick={() => useEditRoute ? navigate(`/${path}/edit/${row[primaryKey]}`) : openEdit(row)} />}
+                    {can.edit && <RowAction type="button" action="edit" icon={meta.edit.icon} title={meta.edit.label} onClick={() => (editRoute ? navigate(`/${path}/edit/${row[primaryKey]}`) : openEdit(row))} />}
                     {can.delete && <RowAction type="button" action="delete" icon={meta.delete.icon} title={meta.delete.label} onClick={() => handleDelete(row)} />}
                     {buttons
                       .filter((button) => rowActionIsVisible(button, row))

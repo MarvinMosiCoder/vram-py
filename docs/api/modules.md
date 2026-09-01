@@ -28,10 +28,25 @@ method on the module's controller by name:
 |---|---|---|
 | `/{module_path}` | `<verb>_index` | `GET /roles` → `get_index()` |
 | `/{module_path}/{action}` | `<verb>_<action>` | `POST /roles/store` → `post_store()` |
-| `/{module_path}/{action}/{rest:path}` | the same, remaining segments as positional args | `GET /users/edit/7` → `get_edit("7")` |
+| `/{module_path}/{action}/{rest:path}` | the same, remaining segments as positional args | `GET /roles/edit/7` → `get_edit("7")` |
 
-Hyphens in the action become underscores: `POST /users/bulk-action` →
-`post_bulk_action()`. Positional arguments are always **strings**.
+Hyphens in the action become underscores: `POST /roles/bulk-action` →
+`post_bulk_action()`. Positional arguments are always **strings**, which
+is why `get_edit()` casts through `cast_key()` before querying.
+
+Eight actions ship on the base class, so every metadata-driven module has
+all of them without writing a line:
+
+| Path | Action | Purpose |
+|---|---|---|
+| `GET /<path>` | `get_index` | the list |
+| `GET /<path>/add` | `get_add` | the list, opened on the create form |
+| `GET /<path>/edit/<id>` | `get_edit` | the list, opened on that record |
+| `POST /<path>/store` | `post_store` | create |
+| `POST /<path>/update` | `post_update` | update |
+| `POST /<path>/delete` | `post_delete` | delete one |
+| `POST /<path>/bulk-action` | `post_bulk_action` | delete or set status on many |
+| `POST /<path>/export` | `post_export` | download the current query as a file |
 
 A method is only reachable if it carries the `@action` decorator. One
 that exists without it returns `404`, not `403` — the dispatcher treats
@@ -85,6 +100,17 @@ place and only the Super Administrator role in `adm_roles`:
     "theme_color": { "label": "Theme", "type": "text", "max": 255 }
   },
   "actions": { "view": true, "create": true, "edit": true, "delete": true },
+  "moduleAccess": { "view": true, "create": true, "update": true, "delete": true },
+  "tableName": "adm_roles",
+  "customRowActions": [],
+  "customIndexButtons": [],
+  "customBulkActions": [],
+  "bulkActions": true,
+  "indexButtons": { "add": true, "export": true, "refresh": true, "bulk": true },
+  "useAddRoute": false,
+  "useEditRoute": false,
+  "pageMode": null,
+  "editRow": null,
   "rows": [
     { "id": 1, "name": "Super Administrator", "is_superadmin": 1, "theme_color": null }
   ],
@@ -98,8 +124,14 @@ place and only the Super Administrator role in `adm_roles`:
 | `primaryKey` | the column the React table keys rows by, and the field a write action expects |
 | `columns` | one entry per `table_fields` key, **in declaration order** — this is the column order in the UI |
 | `formFields` | the raw `form_fields` dict, sent for a create/edit form that does not exist yet |
-| `actions` | the module's capability flags, so the UI can hide buttons |
-| `rows` | only columns that exist on the table; `total` is a separate `COUNT` over the unpaginated query |
+| `actions` | the module's capability flags ANDed with the caller's privileges, so the UI can hide buttons |
+| `moduleAccess` | the privileges alone, with no reference to the module's config. Note the key is `update`, not `edit` — matching the original |
+| `tableName` | the resolved table, used as the default export filename |
+| `customRowActions` / `customIndexButtons` / `customBulkActions` | the module's declared extras, always arrays |
+| `bulkActions` / `indexButtons` | whether the bulk toolbar is on, and which toolbar buttons to draw |
+| `useAddRoute` / `useEditRoute` | whether create/edit navigate to a URL instead of opening the panel in place |
+| `pageMode` / `editRow` | `null` on the index; filled by `/add` and `/edit/<id>`. Always present so the shape never changes |
+| `rows` | only columns that exist on the table or resolve through a `select`; `total` is a separate `COUNT` over the unpaginated query. A row may also carry `__rowIndex`, which is per-cell presentation rather than data |
 | `pagination` | `last_page` is `ceil(total / per_page)`, never below `1` |
 
 `rows` may carry columns that are not in `columns` — the query selects
@@ -163,6 +195,101 @@ does not declare `create` — that is `require()` working, not a bug. See
 
 ---
 
+## `GET /{module_path}/add` and `GET /{module_path}/edit/{id}`
+
+The same body as the index, plus the mode the React page opens in.
+Laravel's `getAdd()` / `getEdit($id)`.
+
+| | `/add` | `/edit/{id}` |
+|---|---|---|
+| Guard | `require("create")` | `require("edit")` |
+| `pageMode` | `"create"` | `"edit"` |
+| `editRow` | `null` | the record, or `null` if no row has that id |
+
+`editRow` is fetched through `index_query()`, so it can only ever contain
+declared columns — a module that keeps a password hash out of its list
+cannot leak it through the edit form either.
+
+`GET /<path>/edit` with **no** id is a valid request, not a `404`: it
+answers `pageMode: "edit"` with `editRow: null`. The id argument keeps a
+default for exactly that reason, since `dynamic.py` checks arity before
+dispatching.
+
+These two are only reachable in the UI when the module sets
+`use_add_route` / `use_edit_route`; otherwise the buttons open the panel
+without navigating. The endpoints answer either way.
+
+---
+
+## `POST /{module_path}/bulk-action`
+
+Apply one action to many rows.
+
+```json
+{ "selectedIds": [2, 3], "bulkAction": "delete" }
+```
+
+| `bulkAction` | Effect | Guard |
+|---|---|---|
+| `delete` | one `DELETE ... WHERE id IN (...)` | `require("delete")` |
+| `set_active` / `set_inactive` | `is_active` = `1`/`0` if the table has that column, else `"ACTIVE"`/`"INACTIVE"` into the first declared status column | `require("edit")` |
+| any other value | matched against the module's `custom_bulk_actions` by `value`, then handed to `handle_custom_bulk_action()` | the module's own code |
+
+**Response** `200 OK` — `{ "message": "Selected records deleted.", "status": "success" }`
+
+| Status | Body | Cause |
+|---|---|---|
+| `403` | `{"detail": "Bulk actions are disabled for this module."}` | the module sets `bulk_actions = False` |
+| `422` | `{"detail": {"selectedIds": "Select at least one record."}}` | missing, empty, or not a list |
+| `422` | `{"detail": {"bulkAction": "Unknown bulk action."}}` | the name fails `^[A-Za-z0-9_-]+$` |
+| `422` | `{"detail": "Unknown bulk action."}` | well-formed, but neither a built-in nor a declared custom action |
+| `422` | `{"detail": "This table has no status, *_status, or is_active column."}` | `set_active` on a table with nothing to write |
+
+Note the last one: a status bulk action on an unsuitable table refuses
+rather than writing somewhere unexpected. `adm_roles` is such a table.
+
+---
+
+## `POST /{module_path}/export`
+
+Download the current query as a file. Runs `custom_index_query`, the
+search, the filters and the sort — everything the list does except
+pagination.
+
+```json
+{ "fileformat": "csv", "filename": "roles", "limit": 500, "columns": ["name", "theme_color"] }
+```
+
+| Field | Default | Notes |
+|---|---|---|
+| `fileformat` | `"csv"` | `csv`, or `xlsx`/`xls` |
+| `filename` | the table name | `/` and `\\` are replaced with `-`; the extension is added for you |
+| `limit` | none | a positive integer caps the row count; anything else is ignored |
+| `columns` | every declared field except the primary key | **intersected with the declared fields** — an undeclared name is dropped, not honoured |
+
+**Response** `200 OK` — a streamed attachment with a `Content-Disposition`
+header. `text/csv; charset=utf-8` (written with a BOM so Excel reads
+accented text) or the xlsx media type.
+
+A cell with `__rowIndex` metadata exports its `label` rather than the raw
+value, so a spreadsheet says `Active` and not `1`.
+
+| Status | Body | Cause |
+|---|---|---|
+| `403` | `{"detail": "Denied access."}` | the module's `actions` does not declare `view` |
+| `422` | `{"detail": "XLSX export needs the openpyxl package. Install it, or export as csv."}` | `openpyxl` is not installed |
+| `422` | `{"detail": "Unsupported export format 'pdf'. Use csv or xlsx."}` | any other format |
+
+PDF is **not ported**. The Laravel original renders it through DomPDF;
+there is no PDF library in `requirements.txt`, so the format is refused
+by name rather than silently downgraded to a spreadsheet.
+
+Because the success response is a binary stream, an error body arrives as
+a blob too when the client asked for one — `GeneratedModulePage` reads the
+blob back as text before showing the message.
+
+---
+
 ## Errors
 
 | Status | Body | Cause |
@@ -178,6 +305,8 @@ does not declare `create` — that is `require()` working, not a bug. See
 | `422` | `{"detail": "'id' is required"}` | an update or delete with no primary key in the body |
 | `500` | `{"detail": "Module 'x' names unregistered controller 'YController'"}` | the row's `controller` string is not in `CONTROLLERS` — a missing import in `modules/__init__.py` |
 | `500` | `{"detail": "Module 'x' names unknown table 'y'"}` | the row's `table_name` is not a table registered on `Base.metadata` |
+| `500` | `{"detail": "Module 'x' joins unknown table 'y'"}` | a `table_fields` entry declares a `join` on a table not in `Base.metadata` |
+| `500` | `{"detail": "Module 'x' references unknown column 'y.z'"}` | a `select`, `first` or `second` names a column that does not exist |
 
 The two `500`s are deliberate: a row pointing at code or a table that
 does not exist is a configuration error, and reporting it as `404` would

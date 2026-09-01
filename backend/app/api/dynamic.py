@@ -7,8 +7,13 @@ from sqlalchemy.orm import Session
 from app import models
 from app.core import auth
 from app.core.database import get_db
-from app.modules.registry import CONTROLLERS
-import app.modules  # noqa: F401 -- imports every controller so it registers
+from app.modules.registry import CONTROLLERS, discover
+
+# Registration, once, at import time. Scans app/modules/admin/ and imports
+# every controller file, which is what runs their @controller decorators.
+# Called here rather than from a package __init__ so that importing the
+# registry stays free of side effects -- see discover()'s docstring.
+discover()
 
 router = APIRouter(tags=["modules"])
 
@@ -50,9 +55,11 @@ async def _dispatch(request, db, user, module_path, action, rest, body):
     if module is None:
         raise HTTPException(status_code=404, detail="Not Found")
 
-    controller_cls = CONTROLLERS.get(module.controller)
+    controller_cls = CONTROLLERS.get((module.controller or "").strip())
     if controller_cls is None:
         # The row exists but no class claims it -- a config error, not a 404.
+        # Usually means the generated file was deleted, or the row's
+        # controller string does not match any @controller() in modules/admin/.
         raise HTTPException(
             status_code=500,
             detail=f"Module '{module.path}' names unregistered controller '{module.controller}'",

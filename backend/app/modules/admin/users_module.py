@@ -1,4 +1,4 @@
-from app.modules.base import ModuleController
+from app.helpers.generated_module import ModuleController
 from app.modules.registry import action, controller
 
 
