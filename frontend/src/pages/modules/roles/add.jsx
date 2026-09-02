@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../../api";
 import { useOptionalToast } from "../../../context/ToastContext";
@@ -10,31 +10,9 @@ import TextInput from "../../../components/form/TextInput";
 import Checkbox from "../../../components/form/Checkbox";
 import InputError from "../../../components/form/InputError";
 
-// A CUSTOM create page, replacing the runtime's built-in create panel.
-//
-// This file's NAME is the whole registration: modulePages.js globs
-// pages/modules/**, so "roles/add.jsx" claims the key "roles/add", and
-// ModuleRoute resolves most-specific-first -- "roles/add" beats "roles".
-// The moment this file exists, /roles/add stops rendering
-// GeneratedModulePage and renders this instead. Delete it and the built-in
-// panel comes back. Nothing in App.jsx or modulePages.js changes either way.
-//
-// Reached from the "Add Role" toolbar button declared in
-// roles_module.py's custom_index_buttons ({"url": "/roles/add"}).
-//
-// There is deliberately NO GET here. RolesController.get_add() exists and
-// would answer /roles/add, but it returns the entire index payload -- the
-// row list, pagination, every column -- because the built-in panel renders
-// on top of the table. A standalone page needs none of that. Fetch only if
-// the form needs server data (a dropdown's options, say), and give it its
-// own lean @action rather than reusing get_add().
 export default function RolesAdd() {
   const navigate = useNavigate();
   const toast = useOptionalToast();
-
-  // form_fields lives on the controller for the generic runtime's benefit.
-  // A custom page does not read it -- owning the markup is the point, so
-  // the fields are spelled out here and the two are free to diverge.
   const [values, setValues] = useState({
     name: "",
     is_superadmin: 0,   // 1/0, not true/false -- adm_roles.is_superadmin is INTEGER
@@ -43,6 +21,8 @@ export default function RolesAdd() {
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
 
+  const [module, setModule] = useState(null);
+
   const set = (field) => (next) => setValues((prev) => ({ ...prev, [field]: next }));
 
   const submit = async (event) => {
@@ -50,21 +30,11 @@ export default function RolesAdd() {
     setBusy(true);
     setErrors({});
     try {
-      // The built-in endpoint, reused as-is: post_store() runs validate()
-      // against form_fields, drops undeclared keys via payload(), stamps
-      // created_at/updated_at, and returns the new id. Only write a custom
-      // post_ action when the insert itself has to differ.
       const res = await api.post("/roles/store", values);
       toast?.handleToast(res.data?.message || "Data saved.", res.data?.status || "success");
-      // RolesController.post_store() overrides the base response to add a
-      // `redirect`, sending a brand new role straight to its permission
-      // matrix. Falling back to the list keeps this page working against
-      // the un-overridden endpoint too.
       navigate(res.data?.redirect || "/roles");
     } catch (err) {
-      // 422 sends detail as {field: message} -- straight into InputError
-      // below. Anything else (403 from require("create"), 500) sends a
-      // string, so it can only go to the toast.
+  
       const detail = err.response?.data?.detail;
       if (detail && typeof detail === "object" && !Array.isArray(detail)) {
         setErrors(detail);
@@ -76,6 +46,18 @@ export default function RolesAdd() {
     }
   };
 
+  useEffect(() => {
+    const fetchModule = async () => {
+      try {
+        const res = await api.get("/roles/module");
+        setModule(res.data);
+      } catch (err) {
+        toast?.handleToast("Could not fetch module data.", "danger");
+      }
+    };
+    fetchModule();
+  }, [toast]);
+  console.log("Module data:", module);
   return (
     <ContentPanel
       as="form"

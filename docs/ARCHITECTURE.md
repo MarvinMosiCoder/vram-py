@@ -79,7 +79,14 @@ backend/
   alembic/             migration environment + versions/ (see MIGRATIONS.md)
   alembic.ini          alembic config — deliberately has no sqlalchemy.url;
                         env.py injects it from core/database.py
-  seed.py              one-off script: creates the Super Administrator role + admin@vram.com
+    seeders/           one file per seeder; the import IS the registration
+      base.py            Seeder — order, idempotency contract, run(db)
+      registry.py        SEEDERS dict + the @seeder decorator + discover()
+      roles_seeder.py    adm_roles
+      admin_user_seeder.py     adm_users (admin@vram.com)
+      modules_seeder.py        adm_modules
+      admin_menus_seeder.py    adm_admin_menuses
+  seed.py              the seeder runner: `python seed.py [--list|<Name>…]`
 
 frontend/
   vite.config.js           React plugin + the Tailwind v4 plugin
@@ -229,9 +236,10 @@ migrations to end up pointed at different databases.
 **Migrations are the only thing that creates the schema.** `main.py` used
 to call `Base.metadata.create_all(bind=engine)` on startup; that call was
 removed, so a fresh database needs `alembic upgrade head` before the app
-can serve a request. (`seed.py` still calls `create_all()` so it works on
-an empty database — the one remaining way to race alembic, see
-[MIGRATIONS.md](MIGRATIONS.md).)
+can serve a request. `seed.py` used to call `create_all()` too, which was
+the one remaining way to race alembic; it now checks the tables exist and
+points you at `alembic upgrade head` instead, so migrations are the only
+thing that touches schema. See [MIGRATIONS.md](MIGRATIONS.md).
 
 ## Models and schemas
 
@@ -309,7 +317,7 @@ erDiagram
 ```
 
 Only one role is seeded today — **Super Administrator** (`id = 1`,
-`is_superadmin = 1`) — via `backend/seed.py`. The model supports more
+`is_superadmin = 1`) — by `RolesSeeder`. The model supports more
 roles (`adm_roles` is a normal table), but nothing in the UI creates
 them yet.
 
@@ -366,11 +374,11 @@ actually stands rather than where it is heading.
 - **`adm_admin_menuses`** — the table behind the admin sidebar, added
   2026-08-30. Same shape as `adm_menuses` minus `is_dashboard`,
   `id_adm_role`, and any foreign key: `name`, `type`, `path`, `slug`,
-  `color`, `icon`, `parent_id`, `is_active`, `sorting`. Holds one row
-  (`Roles`) — inserted by hand, not by `seed.py`, which creates only the
-  Super Administrator role and the admin login. Neither this table nor
-  `adm_modules` is seeded by any script or migration, so a freshly
-  migrated database has an empty sidebar and no modules.
+  `color`, `icon`, `parent_id`, `is_active`, `sorting`. Seeded with
+  `Roles` and `Menus` by `AdminMenusSeeder`, alongside the matching
+  `adm_modules` rows from `ModulesSeeder`. Both tables used to be seeded
+  by nothing at all, so a freshly migrated database had an empty sidebar
+  and no modules; `python seed.py` now covers them.
 
 **A menu's parent is another menu, not a module.** `adm_menuses` used to
 carry `patent_id`, a typo'd FK into `adm_modules.id`. Migration

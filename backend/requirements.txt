@@ -2,9 +2,8 @@ fastapi
 uvicorn
 sqlalchemy
 python-jose
-passlib
 python-multipart
-bcrypt
+bcrypt>=4.0
 email-validator
 alembic
 psycopg2-binary

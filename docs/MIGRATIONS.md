@@ -18,11 +18,10 @@ Alembic reads the connection string from `backend/app/core/database.py`
    existing file needs nothing else; a **new table** means a new file *and* a
    re-export line in `backend/app/models/__init__.py`, or alembic won't see
    it (see [How it's wired up](#how-its-wired-up)). Save the file.
-2. Do not run `python seed.py` yet — it still calls
-   `Base.metadata.create_all()`, which would create your new table before
-   alembic gets a chance to generate a migration for it. (Leaving
-   `uvicorn` running is fine now that `main.py` no longer creates tables,
-   though a schema change under a live app is still worth avoiding.)
+2. Nothing creates tables behind alembic's back any more — `main.py` and
+   `seed.py` both stopped calling `Base.metadata.create_all()` — so there
+   is no longer an ordering hazard here. (Leaving `uvicorn` running is
+   fine, though a schema change under a live app is still worth avoiding.)
 3. Open a terminal in `backend/`.
 4. Run:
    ```bash
@@ -41,9 +40,9 @@ Alembic reads the connection string from `backend/app/core/database.py`
 
 ## If the migration file is empty
 
-This means the table/column already exists in `vram_admin` — usually
-because `python seed.py` was run first (step 2 was skipped) and its
-`Base.metadata.create_all()` created it before you ran `alembic revision`.
+This means the table/column already exists in `vram_admin` — it was
+created outside alembic, by hand in `psql` or by an older `seed.py` back
+when that script still called `Base.metadata.create_all()`.
 
 1. Delete the file alembic just generated (the empty one).
 2. Find the table your model change added, and drop it:
@@ -99,11 +98,11 @@ thing that creates or changes the schema** — which is also why a fresh
 database needs an explicit `alembic upgrade head` before the app can
 serve a request.
 
-`backend/seed.py` still calls `create_all()`, so the seed script works
-against a completely empty database. That is the one remaining way to hit
-the empty-migration problem above: run `seed.py` after adding a model but
-before generating its migration, and `create_all()` beats alembic to
-creating the table.
+`backend/seed.py` used to call it too, so the seed script would work
+against a completely empty database — which was the one remaining way to
+hit the empty-migration problem above. It no longer does: it checks the
+tables it writes to exist and tells you to run `alembic upgrade head` if
+they do not. Nothing in the project creates schema except migrations.
 
 ### How it's wired up
 

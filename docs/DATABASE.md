@@ -113,14 +113,20 @@ leaves you with `adm_roles`, `adm_users`, `adm_modules`, `adm_menuses`
 and `adm_admin_menuses`, plus alembic's own `alembic_version` bookkeeping
 table.
 
-## 5. Seed the first login
+## 5. Seed the starting data
 
 ```powershell
 python seed.py
 ```
 
-Creates the `Super Administrator` role and `admin@vram.com` / `admin123`.
-Safe to re-run — it checks for the existing rows first.
+Runs every seeder in `backend/app/seeders/`, in order: the
+`Super Administrator` role, the `admin@vram.com` / `admin123` login, the
+built-in `roles` and `menus` module rows, and their sidebar entries.
+Safe to re-run — each seeder checks for its rows first.
+
+`python seed.py --list` shows what is registered; `python seed.py
+RolesSeeder` runs just one. It does **not** create tables, so step 4 has
+to have happened first — it will tell you if it has not.
 
 Then start the API:
 

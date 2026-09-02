@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy import func, select
 
+from app import models
 from app.helpers import common_helpers
 from app.helpers.generated_module import ModuleController
 from app.modules.registry import action, controller
@@ -44,8 +45,6 @@ class RolesController(ModuleController):
         }
     ]
 
-    # A key that is absent is OFF -- is_capable() has no default-true
-    # fallback, so "view" and "create" have to be declared to exist.
     actions = {
         "view": True,
         "create": True,
@@ -53,14 +52,7 @@ class RolesController(ModuleController):
         "delete": False,  # Only superadmins can delete roles
         "manage_permissions": True,  # Custom action for managing permissions
     }
-    # A static list, not a function of the row: the React runtime expands
-    # {id} in `url` per row and applies `visibleWhen` itself.
-    #
-    # The url MUST be /<module_path>/<action>/<args...> -- the one shape
-    # dynamic.py dispatches and ModuleRoute.jsx resolves. That single
-    # string names the route, the page file
-    # (frontend/src/pages/modules/roles/edit-permissions.jsx) and the
-    # method below, so none of the three has to be registered anywhere.
+
     custom_row_actions = [
         {
             "label": "Manage Permissions",
@@ -69,24 +61,6 @@ class RolesController(ModuleController):
             "url": "/roles/edit-permissions/{id}",
         }
     ]
-    # --- Create: this module owns it -----------------------------------
-    #
-    # THE LADDER. ModuleController's inherited add is enough for a plain
-    # column-per-field insert. Roles is not, so it escalates one rung at a
-    # time. Each rung is independent -- a new module takes only what it
-    # needs, and inherits the rest:
-    #
-    #   validate()      business rules a form_fields dict cannot state
-    #   before_store()  shape the payload on its way into the INSERT
-    #   after_store()   side effects, once the row has an id
-    #   post_store()    own the write, or the response, entirely
-    #
-    # These apply to EVERY create path at once -- the runtime's built-in
-    # panel, /roles/add, and the custom page at
-    # frontend/src/pages/modules/roles/add.jsx -- because all three POST to
-    # /roles/store. That is the whole reason to override here instead of
-    # writing a second endpoint for the custom page: two endpoints drift,
-    # one does not.
 
     def validate(self, data):
         """Rung 2. super() first, so `required` and `max` from form_fields
@@ -127,44 +101,20 @@ class RolesController(ModuleController):
         return data
 
     def before_store(self, payload):
-        """Rung 1. Runs between payload() and the INSERT. MUST return the
-        payload -- a bare mutation is silently dropped."""
         payload["name"] = (payload.get("name") or "").strip()
-        # add.jsx's colour input emits "#RRGGBB", but the text field beside
-        # it lets someone type "3b82f6". Normalise once here so the column
-        # never holds both spellings of the same colour.
         color = (payload.get("theme_color") or "").strip().lower()
         if color:
             payload["theme_color"] = color if color.startswith("#") else "#" + color
         return payload
 
     def after_store(self, payload, record_id):
-        """Rung 1. The row exists and has an id. post_store() has already
-        committed, so anything written here needs a commit of its own."""
         # Seed this role's privilege rows / write an audit entry here.
         pass
 
     @action
     def post_store(self):
-        """Rung 3 -- POST /roles/store.
-
-        RE-APPLY @action ON EVERY OVERRIDE. dynamic.py dispatches only on
-        methods carrying __module_action__, and this is a new function
-        object, so the base class's decorator does NOT carry over. Leave it
-        off and the endpoint 404s -- which reads like a missing route
-        rather than a missing decorator.
-
-        Delegating to super() rather than re-typing the insert: the base
-        already runs validate() -> payload() -> before_store() -> stamps ->
-        RETURNING id -> after_store(), and every one of those picks up the
-        overrides above. Copying its body here would only create a second
-        thing to keep in sync. Re-type the INSERT only when the write
-        itself must differ -- a second table, a transaction spanning both.
-        """
         result = super().post_store()
-        # A brand new role has no permissions, so the matrix is the only
-        # useful next screen. The base response shape is fixed, and that is
-        # what makes this override earn its place.
+        common_helpers.dd(self.body)
         result["redirect"] = "/roles/edit-permissions/%s" % result["id"]
         return result
 
@@ -190,4 +140,31 @@ class RolesController(ModuleController):
         self.db.commit()
         return {"success": True, "message": "Permissions updated successfully."}
 
-    
+    @action
+    def get_module(self, role_id=None):
+        role_id = int(role_id or 0)
+        modules = models.Modules.__table__
+        priv = models.AdminRolesPrivileges.__table__
+
+        def flag(column):
+            # One correlated subquery per flag -- the DB::raw() lines, except
+            # role_id rides as a bound parameter instead of being interpolated
+            # into the SQL string.
+            return (
+                select(priv.c[column])
+                .where(priv.c.id_adm_modules == modules.c.id)
+                .where(priv.c.id_adm_roles == role_id)
+                .scalar_subquery()
+                .label(column)
+            )
+
+        flags = ("is_visible", "is_create", "is_read",
+                "is_edit", "is_delete", "is_void", "is_override")
+
+        stmt = (
+            select(modules, *[flag(c) for c in flags])   # select(modules) == "adm_modules.*"
+            .where(modules.c.is_protected == 0)
+            .where(modules.c.deleted_at.is_(None))
+            .order_by(modules.c.name.asc())
+        )
+        return [dict(row) for row in self.db.execute(stmt).mappings().all()]

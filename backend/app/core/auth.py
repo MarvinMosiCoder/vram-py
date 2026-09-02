@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
+import bcrypt
 from jose import jwt, JWTError
-from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -14,20 +14,43 @@ SECRET_KEY = "change-this-to-a-long-random-string-in-production"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # Tells FastAPI where clients send their email/password to get a token.
 # Also lets FastAPI auto-extract the "Authorization: Bearer <token>" header.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 
 # --- Password helpers ------------------------------------------------
+# This used to go through passlib's CryptContext. passlib 1.7.4 (its last
+# release, from 2020) reads `bcrypt.__about__.__version__` to detect the
+# backend, and bcrypt >= 4.1 removed that attribute -- so on bcrypt 5.x
+# passlib's backend probe crashes and every hash() call dies with
+# "ValueError: password cannot be longer than 72 bytes". Calling bcrypt
+# directly removes the abandoned middle layer; the hashes are the same
+# standard $2b$ strings, so anything already in adm_users still verifies.
+#
+# bcrypt only ever looks at the first 72 bytes and now *raises* on more
+# rather than truncating. passlib truncated silently, so this keeps that
+# behaviour explicit instead of turning a long password into a 500.
+BCRYPT_MAX_BYTES = 72
+
+
+def _bcrypt_bytes(password: str) -> bytes:
+    return password.encode("utf-8")[:BCRYPT_MAX_BYTES]
+
+
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(_bcrypt_bytes(password), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    # checkpw raises on a malformed/non-bcrypt stored hash; a bad hash in
+    # the database should read as "wrong password", not crash the login.
+    try:
+        return bcrypt.checkpw(
+            _bcrypt_bytes(plain_password), hashed_password.encode("utf-8")
+        )
+    except (ValueError, TypeError):
+        return False
 
 
 # --- JWT helpers -------------------------------------------------------

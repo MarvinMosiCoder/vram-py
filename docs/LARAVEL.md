@@ -49,9 +49,9 @@ an inference rather than something the code states, it says so.
 | Eager loading | `with('role')` | none configured | `user.role` lazy-loads on access inside the session; there is no N+1 guard |
 | Migrations | `php artisan make:migration`, `php artisan migrate` | `alembic revision --autogenerate -m "..."`, `alembic upgrade head` | see [MIGRATIONS.md](MIGRATIONS.md). `--autogenerate` diffs the models against the live database, which `make:migration` does not do |
 | Migration rollback | `php artisan migrate:rollback` | `alembic downgrade -1` | Alembic revisions form a linked list by hash, not a batch number |
-| Seeding | `php artisan db:seed`, seeder classes | `python seed.py` | one idempotent script; creates the Super Administrator role and `admin@vram.com` |
+| Seeding | `php artisan db:seed`, seeder classes | `python seed.py` | closest mapping in the project: one `Seeder` subclass per file in `app/seeders/`, each idempotent, ordered by an `order` attribute rather than by `DatabaseSeeder::call([...])`. `python seed.py <Name>` is `--class=`; discovery is by filesystem scan, so there is no `DatabaseSeeder` to register in |
 | Config and env | `.env` + `config()` + `config:cache` | **nothing** — literal constants in `core/database.py` and `core/auth.py` | a real gap, not a mapping. `SECRET_KEY` and the Postgres password are in source |
-| Password hashing | `Hash::make` / `Hash::check` | `auth.hash_password` / `auth.verify_password` (passlib + bcrypt) | same bcrypt underneath |
+| Password hashing | `Hash::make` / `Hash::check` | `auth.hash_password` / `auth.verify_password` (the `bcrypt` package directly) | same bcrypt underneath. These went through passlib until it broke on bcrypt 5.x — see `core/auth.py`'s comment |
 | Current user | `auth()->user()` | a route parameter: `current_user: models.User = Depends(auth.get_current_user)` | there is no ambient global to reach for; if a function needs the user, it must be passed in |
 | Session auth | session cookie + `web` guard | JWT in `localStorage`, `Authorization: Bearer <token>` | no cookie, therefore **no CSRF token and no `@csrf`** — the attack it prevents does not apply |
 | Logout | `Auth::logout()` invalidates the session | `POST /logout` increments `adm_users.token_version` | JWTs are stateless, so revocation needs a version stamped into the token and compared on every request |

@@ -41,7 +41,7 @@ python -m venv venv
 venv\Scripts\Activate.ps1      # Windows
 pip install -r requirements.txt
 alembic upgrade head           # create the tables
-python seed.py
+python seed.py                 # roles, admin login, modules, sidebar
 uvicorn app.main:app --reload
 ```
 API runs at http://localhost:8000 — interactive docs at http://localhost:8000/docs

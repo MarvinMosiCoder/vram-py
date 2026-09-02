@@ -576,12 +576,18 @@ included, so the two never drift apart.
 
 Say you want Menu Management on `adm_admin_menuses`.
 
-Worth knowing before step 1: **nothing seeds `adm_modules`.** `seed.py`
-creates only the Super Administrator role and the admin login, and no
-migration inserts module rows, so the `roles` row that exists today was
-added by hand — and a freshly migrated database has no modules at all.
-Extending `seed.py` to insert the built-in module and menu rows is
-probably the single highest-value change to make here.
+Worth knowing before step 1: the built-in modules are seeded, so you can
+copy a working pair rather than starting from an empty table.
+`ModulesSeeder` inserts the `roles` and `menus` rows in `adm_modules` and
+`AdminMenusSeeder` inserts their sidebar entries — both in
+`backend/app/seeders/`, both run by `python seed.py`. Neither table was
+seeded by anything before, so a freshly migrated database used to come up
+with no modules and an empty sidebar.
+
+`ModulesSeeder` also refuses to insert a row whose `controller` string is
+not in `CONTROLLERS`, and `AdminMenusSeeder` refuses a menu whose `slug`
+matches no active module `path` — the two failure modes described in
+steps 2 and 4 below, caught at seed time instead of at request time.
 
 Steps 1 to 3 can be generated rather than typed.
 `app/modules/admin/module_generator.py` exposes `generate()`, the counterpart

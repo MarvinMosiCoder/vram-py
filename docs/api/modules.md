@@ -10,11 +10,12 @@ guards do, and how to add one.
 **These paths are data-driven.** There is no fixed list of them: three
 catch-all routes serve whatever rows are in `adm_modules`, so the routes
 that exist on a given database are `SELECT path FROM adm_modules WHERE
-is_active = 1`. Today that is one module, `roles`.
+is_active = 1`. On a seeded database that is two modules, `roles` and
+`menus`.
 
-Note that **nothing seeds `adm_modules`** — neither `seed.py` nor any
-migration inserts a row, so the `roles` row was added by hand and a fresh
-database has no modules at all until you insert one. See
+Those rows come from `ModulesSeeder` (`python seed.py`). Nothing seeded
+`adm_modules` before, so a fresh database had no modules at all until one
+was inserted by hand. See
 [../MODULES.md](../MODULES.md#adding-a-module).
 
 ---

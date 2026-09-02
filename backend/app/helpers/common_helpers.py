@@ -209,3 +209,12 @@ def stamp_updated(payload, enabled=True):
     if enabled:
         payload["updated_at"] = now()
     return payload
+
+class DumpAndDie(Exception):
+    def __init__(self, *args):
+        self.payload = args[0] if len(args) == 1 else list(args)
+
+
+def dd(*args):
+    raise DumpAndDie(*args)
+

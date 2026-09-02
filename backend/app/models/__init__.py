@@ -8,10 +8,11 @@
 # alembic's autogenerate diffs against -- see docs/MIGRATIONS.md).
 from app.models.admin import (
     AdminMenuses,
+    AdminRolesPrivileges,
     Menuses,
     Modules,
     Role,
     User,
 )
 
-__all__ = ["Role", "User", "Modules", "Menuses", "AdminMenuses"]
+__all__ = ["Role", "User", "Modules", "Menuses", "AdminMenuses", "AdminRolesPrivileges"]

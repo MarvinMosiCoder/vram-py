@@ -32,14 +32,19 @@ blocks activation, run once:
 ## 3. Installing packages with pip
 
 ```bash
-pip install fastapi uvicorn sqlalchemy python-jose passlib python-multipart bcrypt
+pip install fastapi uvicorn sqlalchemy python-jose python-multipart bcrypt
 ```
 
 - **fastapi** — the web framework (defines your API routes)
 - **uvicorn** — the server that actually runs FastAPI and listens on a port
 - **sqlalchemy** — ORM: write Python classes instead of raw SQL
 - **python-jose** — creates/verifies JWT login tokens
-- **passlib + bcrypt** — securely hash passwords (never store plain text)
+- **bcrypt** — securely hash passwords (never store plain text). This was
+  `passlib` wrapping bcrypt until 2026-09-02: passlib's last release is
+  from 2020 and it detects its backend by reading an attribute bcrypt 4.1
+  removed, so on bcrypt 5.x every `hash()` died with "password cannot be
+  longer than 72 bytes". `core/auth.py` calls bcrypt directly now — same
+  `$2b$` hashes, one less abandoned dependency
 - **python-multipart** — lets FastAPI parse login form data
 - **alembic** — versioned schema migrations (see [docs/MIGRATIONS.md](docs/MIGRATIONS.md))
 - **psycopg2-binary** — the PostgreSQL driver. SQLAlchemy is the ORM, but
@@ -184,6 +189,52 @@ PostgreSQL server. What actually changed, nearly all of it in
   `sqlalchemy.url`; `alembic/env.py` imports `DATABASE_URL` from
   `database.py` and sets it at runtime, so the app and its migrations
   cannot drift onto different databases.
+
+### Seeders (`backend/app/seeders/`)
+
+Migrations build the *schema*; seeders put the starting *rows* in it. The
+split matters because a fresh clone needs both, and only one of them is
+versioned history.
+
+Laravel has `php artisan db:seed` with a `DatabaseSeeder` that calls each
+seeder class in an array. Here it is one `Seeder` subclass per file:
+
+```python
+@seeder
+class RolesSeeder(Seeder):
+    order = 10
+    def run(self, db):
+        ...
+```
+
+Two conventions do the work of Laravel's array:
+
+- **`order`** decides what runs when. `AdminUserSeeder` is `20` because
+  `adm_users.id_adm_role` is a foreign key into rows `RolesSeeder` (`10`)
+  creates. Numbers leave gaps so a new seeder slots in without renumbering.
+- **The filesystem is the registry** — `registry.discover()` imports every
+  `*_seeder.py` in the folder, exactly the way `app/modules/registry.py`
+  imports every `*_module.py` (§8). Dropping the file in registers it;
+  there is no list to keep in sync, which is the `DatabaseSeeder` array's
+  whole job.
+
+Every seeder must be **idempotent** — check before inserting, so re-running
+is a no-op rather than a duplicate-key error. You re-run seeders constantly
+while developing, and `python seed.py` after a `DROP SCHEMA` should get you
+back to a known-good state in one command.
+
+```bash
+python seed.py                # all of them, in order
+python seed.py RolesSeeder    # just one
+python seed.py --list         # what is registered
+```
+
+`seed.py` itself is only the runner. It deliberately does *not* call
+`Base.metadata.create_all()` — it used to, and that let it create a table
+before alembic had generated a migration for it, which is how you end up
+with a mysteriously empty migration file
+([docs/MIGRATIONS.md](docs/MIGRATIONS.md)). It checks the tables exist and
+points at `alembic upgrade head` instead.
 
 ## 6. Auth & RBAC (`backend/app/core/auth.py`)
 
@@ -437,7 +488,7 @@ cd backend
 venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 alembic upgrade head    # creates every table; nothing does this at startup
-python seed.py          # creates roles + admin@vram.com / admin123
+python seed.py          # roles, admin@vram.com / admin123, modules, menus
 uvicorn app.main:app --reload
 
 # Frontend (separate terminal)
@@ -467,12 +518,6 @@ Fix first — these are known-broken or known-open, not ideas:
   can read every row of every module's table.
 - **Validate the `slug` / `path` pairing** between `adm_admin_menuses`
   and `adm_modules`, or read the sidebar link from `adm_modules` instead.
-- **Seed the module and menu rows.** Nothing creates them — not
-  `seed.py`, not a migration — so a freshly migrated database has an
-  empty sidebar and no modules, and the existing `roles` rows were
-  inserted by hand. Adding them to `seed.py` makes the project
-  reproducible from scratch.
-
 Then build:
 
 - A create/edit form in `GeneratedModulePage` — the backend already sends
