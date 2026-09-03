@@ -5,7 +5,6 @@ from app.schemas.admin.menus import MenuOut
 from app.schemas.admin.module import ModuleOut
 from app.schemas.admin.token import Token
 from app.schemas.admin.user import UserCreate, UserLogin, UserOut
-from app.schemas.admin.admin_menus import AdminMenu
 from app.schemas.admin.adm_roles_privileges import AdminRolesPrivileges
 
 __all__ = [
@@ -15,6 +14,5 @@ __all__ = [
     "Token",
     "ModuleOut",
     "MenuOut",
-    "AdminMenu",
     "AdminRolesPrivileges",
 ]

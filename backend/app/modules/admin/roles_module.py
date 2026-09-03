@@ -48,51 +48,28 @@ class RolesController(ModuleController):
     actions = {
         "view": True,
         "create": True,
-        "edit": False,
+        "edit": True,
         "delete": False,  # Only superadmins can delete roles
         "manage_permissions": True,  # Custom action for managing permissions
     }
 
-    custom_row_actions = [
-        {
-            "label": "Manage Permissions",
-            "action": "manage_permissions",
-            "icon": "pencil",
-            "url": "/roles/edit-permissions/{id}",
-        }
-    ]
+    use_edit_route = True
 
     def validate(self, data):
-        """Rung 2. super() first, so `required` and `max` from form_fields
-        still apply -- this only adds what a config dict cannot express."""
         data = super().validate(data)
-
-        # Case-insensitive: "Admin" and "admin" being two different roles
-        # is a support ticket waiting to happen.
         name = (data.get("name") or "").strip()
         clash = select(self.table.c[self.primary_key]).where(
             func.lower(self.table.c.name) == name.lower()
         )
-        # validate() serves BOTH create and update -- post_update() calls it
-        # too. On update the body carries the primary key, and without this
-        # exclusion a role would collide with itself and could never be
-        # saved under its own name.
         current_id = self.body.get(self.primary_key)
         if current_id is not None:
             clash = clash.where(
                 self.table.c[self.primary_key] != self.cast_key(current_id)
             )
         if self.db.execute(clash.limit(1)).first():
-            # detail MUST be a {field: message} dict. That is the shape
-            # GeneratedModulePage's errorsFrom() and add.jsx both read to
-            # light up the offending input; a plain string only ever
-            # reaches a toast.
             raise HTTPException(
                 status_code=422, detail={"name": "That role already exists."}
             )
-
-        # Privilege escalation is not something a form config can guard,
-        # so the rule lives here rather than in form_fields.
         if data.get("is_superadmin") and not common_helpers.is_superadmin(self.user):
             raise HTTPException(
                 status_code=422,
@@ -114,8 +91,13 @@ class RolesController(ModuleController):
     @action
     def post_store(self):
         result = super().post_store()
-        common_helpers.dd(self.body)
-        result["redirect"] = "/roles/edit-permissions/%s" % result["id"]
+        self._save_permissions(result["id"], self.body.get("permissions"))
+        return result
+
+    @action
+    def post_update(self):
+        result = super().post_update()
+        self._save_permissions(self.cast_key(self.record_id()), self.body.get("permissions"))
         return result
 
     @action
@@ -164,7 +146,27 @@ class RolesController(ModuleController):
         stmt = (
             select(modules, *[flag(c) for c in flags])   # select(modules) == "adm_modules.*"
             .where(modules.c.is_protected == 0)
-            .where(modules.c.deleted_at.is_(None))
             .order_by(modules.c.name.asc())
         )
         return [dict(row) for row in self.db.execute(stmt).mappings().all()]
+
+    def _save_permissions(self, role_id, permissions):
+        flag_names = ("is_visible", "is_create", "is_read", "is_edit", "is_delete", "is_void", "is_override")
+
+        for module_id, flag_values in (permissions or {}).items():
+            flags = {f: int(bool((flag_values or {}).get(f))) for f in flag_names}
+
+            row = (
+                self.db.query(models.AdminRolesPrivileges)
+                .filter_by(id_adm_modules=int(module_id), id_adm_roles=role_id)
+                .first()
+            )
+            if row:
+                for key, value in flags.items():
+                    setattr(row, key, value)          # tracked -- no explicit save()
+            else:
+                self.db.add(models.AdminRolesPrivileges(
+                    id_adm_roles=role_id, id_adm_modules=int(module_id), **flags
+                ))
+        self.db.commit()
+

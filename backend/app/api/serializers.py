@@ -12,4 +12,5 @@ def user_out(user: models.User) -> schemas.UserOut:
         theme_color=user.role.theme_color if user.role else None,
         role=user.role.name if user.role else None,
         role_id=user.id_adm_role,
+        is_superadmin=bool(user.role.is_superadmin) if user.role else False,
     )

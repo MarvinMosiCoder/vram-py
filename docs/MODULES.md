@@ -125,8 +125,21 @@ load-bearing:
 
 One more, easy to miss because it is a *negative* guard: `index_query()`
 selects only the declared columns. Laravel's version does `table.*` and
-filters at render time, which still pulls `adm_users.password` out of the
-database; this never fetches it at all.
+filters at render time, which still pulls every column out of the
+database; this only ever selects `table_fields` ∪ `form_fields`.
+
+**That is narrower than "never fetches sensitive columns," and the gap is
+real, not hypothetical.** `index_query()`'s `form_columns` fallback loop
+exists so a form-only field — one declared in `form_fields` but not
+`table_fields`, like a foreign key needed to prefill an edit form's select
+— is still available on the row. The same loop has no concept of
+"sensitive": `users_module.py` names `password` in `form_fields` (so the
+create/edit form has a field for it) but not in `table_fields` (so it
+doesn't render as a list column), and the loop pulls it into every
+`GET /users` and `GET /users/edit/<id>` response anyway — verified
+against the running API, the bcrypt hash comes back in the JSON. The fix
+is a `type == "password"` exclusion in that loop; see
+[Known gaps](#known-gaps).
 
 ## The `ModuleController` contract
 
@@ -296,6 +309,42 @@ not `#RRGGBB` falls back to a default rather than injecting a style.
 Upstream this is hardcoded to a `statuses` table; here it is any joined
 table with those two columns.
 
+The example above is not hypothetical — `users_module.py` declares
+exactly this `role_name` field to show each user's role in the list.
+
+### FK-select form fields
+
+`table_fields`' join resolves a joined column for *display*.
+`form_fields` has a write-side counterpart for the same relationship: a
+`type: "select"` field naming a table gets its `options` filled from that
+table's live rows, instead of a module having to hardcode a snapshot of
+them.
+
+```python
+form_fields = {
+    "id_adm_role": {
+        "label": "Role",
+        "type": "select",
+        "table": "adm_roles",
+        "value_field": "id",
+        "display_field": "name",
+    },
+}
+```
+
+`resolved_form_fields()` runs this per request, off a copy of
+`form_fields` — the class-level dict itself is never mutated, so this is
+safe across concurrent requests. A field that already declares `options`
+(an enum column, from `build_meta()`) is left alone; only a `select`
+field with a `table` and no `options` gets resolved. `value_field` and
+`display_field` default to `"id"` and `"name"` if omitted.
+
+As with joined `table_fields`, the field's own key must name a real
+column — `form_columns` is filtered to `[c for c in form_fields if c in
+self.table.c]`, so `role_id` on a table whose FK is actually
+`id_adm_role` is silently dropped from every write, same failure mode as
+a wrong join key.
+
 ### Bulk actions
 
 `POST /<path>/bulk-action`, body `{"selectedIds": [1, 2], "bulkAction": "delete"}`.
@@ -344,12 +393,26 @@ access by `resolve_index_buttons()` — Laravel's `indexButtons()`:
 
 So neither half can offer a button whose endpoint would answer `403`.
 
-`users_module.py` is the opposite: it overrides `get_index` with a stub
-and adds `get_edit` / `post_bulk_action`, purely to demonstrate that a
-subclass can bypass the metadata pipeline entirely and that the
-dispatcher's rules hold. Its `not_reachable()` method carries no
-`@action`, so requesting it returns `404` even though the method exists.
-It is a reachability test, not a real Users module.
+`users_module.py` used to be that reachability test — a stub `get_index`
+and a `not_reachable()` method with no `@action`, proving a bare method
+404s. It is a real module now: `table_fields`/`form_fields` as declared
+above (the `role_name` join, the `id_adm_role` FK-select), `actions`
+without `"delete"` (present-but-absent is off, same as `False`), and
+`bulk_actions = True` — which only keeps the toolbar's *infrastructure*
+switched on. With no `status`-named `form_fields` key and `"delete"`
+absent, `bulkOptions` on the frontend has nothing to put in it regardless
+of that flag; see [Bulk actions](#bulk-actions) above for the three
+things that actually populate the dropdown.
+
+Two gaps left open on the write side, worth knowing before extending
+this module further: `post_store`/`post_update` write `password` to the
+column unhashed (no `before_store`/`before_update` override yet), and
+`index_query()` currently selects `password` into every list/edit
+response — a real column named in `form_fields` but not in
+`table_fields` gets pulled in by the `form_columns` loop in
+`index_query()`, the same mechanism that (correctly) makes `id_adm_role`
+available to prefill the edit form's Role select. The fix is a `type ==
+"password"` exclusion in that loop; it just hasn't landed yet.
 
 ### Custom actions
 
@@ -574,27 +637,38 @@ included, so the two never drift apart.
 
 ## Adding a module
 
-Say you want Menu Management on `adm_admin_menuses`.
+Say you want Menu Management on `adm_menuses` — the table
+`GET /user_sidebar` already reads (see [api/sidebar.md](api/sidebar.md)),
+currently with no admin screen for editing its rows by hand.
+
+> This walkthrough used to target `adm_admin_menuses`, seeded by a
+> `AdminMenusSeeder` that inserted a matching sidebar row per module.
+> Both are gone — `adm_admin_menuses` was reverted along with the spec
+> that introduced it (see
+> [superpowers/specs/2026-09-01-data-driven-modules-design.md](superpowers/specs/2026-09-01-data-driven-modules-design.md)),
+> and `/admin_sidebar` reads `adm_modules` directly now, so a module's
+> sidebar entry no longer needs a second row in a second table at all —
+> see step 4 below, which shrank because of that.
 
 Worth knowing before step 1: the built-in modules are seeded, so you can
-copy a working pair rather than starting from an empty table.
-`ModulesSeeder` inserts the `roles` and `menus` rows in `adm_modules` and
-`AdminMenusSeeder` inserts their sidebar entries — both in
-`backend/app/seeders/`, both run by `python seed.py`. Neither table was
-seeded by anything before, so a freshly migrated database used to come up
-with no modules and an empty sidebar.
+copy a working row rather than starting from an empty table.
+`ModulesSeeder` (`backend/app/seeders/modules_seeder.py`, run by
+`python seed.py`) inserts the `roles` and `users` rows in `adm_modules`,
+and **upserts** — an edit to its `MODULES` list is pushed to the database
+on every run, not just inserted once and then ignored. No seeder exists
+yet for `adm_menuses` itself, so a Menu Management module's own rows
+still need inserting by hand, the same as step 4 below.
 
-`ModulesSeeder` also refuses to insert a row whose `controller` string is
-not in `CONTROLLERS`, and `AdminMenusSeeder` refuses a menu whose `slug`
-matches no active module `path` — the two failure modes described in
-steps 2 and 4 below, caught at seed time instead of at request time.
+`ModulesSeeder` also refuses to insert (or update) a row whose
+`controller` string is not in `CONTROLLERS` — the failure mode described
+in step 2 below, caught at seed time instead of at request time.
 
 Steps 1 to 3 can be generated rather than typed.
 `app/modules/admin/module_generator.py` exposes `generate()`, the counterpart
 of clicking *Add Module* in the Laravel template's Modules screen: it
-introspects `adm_admin_menuses` through SQLAlchemy — columns, types,
+introspects the target table through SQLAlchemy — columns, types,
 nullability, defaults, primary key — writes
-`app/modules/admin/menus_module.py` with that metadata as **editable
+`app/modules/admin/<name>_module.py` with that metadata as **editable
 literals**, and inserts the `adm_modules` row.
 
 There is no command-line wrapper around it; the Modules admin screen is where
@@ -608,13 +682,17 @@ The steps, done by hand:
 
    ```sql
    INSERT INTO adm_modules (name, icon, path, table_name, controller, is_active, is_protected)
-   VALUES ('Menus', 'fa fa-bars', 'menus', 'adm_admin_menuses', 'MenusController', 1, 1);
+   VALUES ('Menus', 'fa fa-bars', 'menus', 'adm_menuses', 'MenusController', 1, 1);
    ```
 
 2. **Write the controller** as `backend/app/modules/admin/menus_module.py`,
    declaring `table_fields`, `form_fields`, and `search_columns`. The
    `@controller("MenusController")` string must match the `controller`
-   column exactly.
+   column exactly. Worth knowing before writing `form_fields`: an
+   `id_adm_role` field naming `adm_roles` as `table`/`value_field`/
+   `display_field` gets a real, live role dropdown for free — see
+   [FK-select form fields](#fk-select-form-fields) above, and
+   `users_module.py`'s own `id_adm_role` field for a working example.
 
 3. **Nothing.** There is no registration step. `registry.discover()`
    scans `modules/admin/` and imports every file it finds, so dropping the
@@ -627,19 +705,17 @@ The steps, done by hand:
    the class by name. `iter_modules` is the glob; `import_module` is the
    autoload.
 
-4. **Add the sidebar row**, and make `slug` match `adm_modules.path`:
-
-   ```sql
-   INSERT INTO adm_admin_menuses (name, slug, path, icon, is_active, sorting)
-   VALUES ('Menus', 'menus', 'menus', 'fa fa-bars', 1, 2);
-   ```
-
-   This is the sharpest footgun in the system. `AppSidebar.jsx` builds its
-   link from the row's **`slug`** in `adm_admin_menuses`, while
-   `dynamic.py` resolves the module by **`path`** in `adm_modules`. The
-   two tables have no foreign key between them and nothing validates the
-   pair, so a mismatched `slug` produces a sidebar link that 404s with
-   both rows looking perfectly correct.
+4. **The sidebar entry is the same row as step 1 — nothing further to
+   add.** `AppSidebar.jsx`'s "Admin Menu" section reads `/admin_sidebar`,
+   which reads `adm_modules` directly (`is_protected = 1`); there is no
+   second table to keep in sync with it any more. If this module should
+   instead appear under "Menu" (the non-admin section, role-scoped) —
+   which a Menu Management screen plausibly should not, but a module
+   built on some other table might — that's a **separate** row in
+   `adm_menuses` itself, read by `/user_sidebar`, unrelated to the
+   `adm_modules` row that makes the URL resolve. The two are independent:
+   a module can exist with no sidebar entry in either place, reachable
+   only by typing the URL.
 
 5. **Restart uvicorn** if it is not already watching the folder.
    `--reload` picks up the new file, and the `adm_modules` row is read per
@@ -743,8 +819,14 @@ Read this section before treating the module system as finished.
   dynamic router or a role column consulted inside `require()`.
 - **No row-level scoping.** Any authenticated user who knows a module's
   path sees every row of its table.
-- **`users_module.UsersController` is a demo**, not a Users module — it
-  returns stub data from an overridden `get_index`.
+- **`users_module.UsersController` writes and leaks passwords in
+  plaintext.** `post_store`/`post_update` never hash `password` before
+  writing it, and `index_query()` selects it into every list/edit
+  response — a real column named in `form_fields` but not in
+  `table_fields` gets pulled in by the loop that also (correctly) makes a
+  joined-in FK like `id_adm_role` available to the edit form. Fix: hash in
+  `before_store`/`before_update`, and exclude `type == "password"` fields
+  from that `index_query()` loop.
 - **The `slug` / `path` coupling is unvalidated**, as described in step 4
   above.
 

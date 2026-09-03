@@ -60,7 +60,7 @@ an inference rather than something the code states, it says so.
 | Page resolution | Inertia resolves a controller's page name to a component | one splat route in `App.jsx`, plus `import.meta.glob` in `modulePages.js` | the same glob the original's `app.jsx` resolves pages with |
 | Shared props | `Inertia::share`, `HandleInertiaRequests` | `AuthContext` calling `GET /me` on mount | the client resolves its own user, because the server never renders a page |
 | Persistent layout | an Inertia persistent layout component | `layout/Layout.jsx` wrapping each route element | |
-| Sidebar partial | a Blade partial fed from shared props | `layout/Sidebar.jsx` fetching `GET /admin_sidebar` | one extra HTTP call where Laravel had none |
+| Sidebar partial | a Blade partial fed from shared props (`auth.sessions.user_menus`/`admin_menus`) | `layout/AppSidebar.jsx` composing `UserSidebar.jsx`/`AdminSidebar.jsx`, fetching `GET /user_sidebar`/`GET /admin_sidebar` | two extra HTTP calls where Laravel had none — no shared-props mechanism to compute them server-side per request |
 | Asset build | Vite via `laravel-vite-plugin`, entry in `resources/` | Vite directly, entry `src/main.jsx` | same bundler, no framework wrapper |
 | CSS | Tailwind, usually plus AdminLTE in a template of this vintage | Tailwind v4 **and** hand-written semantic CSS side by side, all in `src/index.css` | the semantic CSS is unlayered so it beats Tailwind's layers — read [ARCHITECTURE.md](ARCHITECTURE.md#styling-and-theming) before reaching for a utility |
 | Tailwind config | `tailwind.config.js` + `postcss.config.js` | neither — v4 configures itself from an `@theme` block in the CSS | |

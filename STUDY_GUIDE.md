@@ -138,11 +138,13 @@ called `vram_admin` ([docs/DATABASE.md](docs/DATABASE.md) sets it up):
 - **Menuses** (`adm_menuses`) — one sidebar entry: `path`, `icon`,
   `sorting`, `parent_id` (FK -> **Menuses**, the accordion group it sits
   under; `NULL` = top level), `id_adm_role` (FK -> Role, who can see it).
-- **AdminMenuses** (`adm_admin_menuses`) — the admin sidebar, added
-  2026-08-30: `name`, `type`, `path`, `slug`, `color`, `icon`,
-  `parent_id`, `is_active`, `sorting`. Same idea as Menuses but with no
-  foreign keys and no role column. This is the one `GET /admin_sidebar`
-  actually reads.
+  This is what `GET /user_sidebar` reads, scoped to the caller's own
+  role, one level deep.
+- `AdminMenuses` (`adm_admin_menuses`) — briefly the table
+  `GET /admin_sidebar` read, added 2026-08-30 — is gone as of
+  2026-09-03. `/admin_sidebar` reads **Modules** instead now, filtered to
+  `is_protected = 1`: the built-in admin modules, not a separate menu
+  table.
 
 `relationship()` doesn't create a column — it's a SQLAlchemy
 convenience so `user.role.name` works in Python without you writing a
@@ -270,6 +272,7 @@ way, and [docs/API.md](docs/API.md) for full request/response shapes):
 | `GET /me` | any logged-in user | `auth.py` |
 | `GET /dashboard` | any logged-in user | `dashboard.py` |
 | `GET /admin_sidebar` | any logged-in user (no role filter yet) | `sidebar.py` |
+| `GET /user_sidebar` | any logged-in user, scoped to their own role | `sidebar.py` |
 | `GET /admin/users` | role id `1` only | `admin.py` |
 | `GET /editor/content` | role id `1` only (no separate editor role yet) | `editor.py` |
 | `GET\|POST /{module_path}…` | any logged-in user, no role check | `dynamic.py` (§8) |
@@ -397,12 +400,12 @@ a valid token is enough. See
   frontend (a UX convenience) — the backend's `require_role` is what
   actually enforces it securely, since frontend checks can always be
   bypassed by a determined user.
-- **`Sidebar.jsx`** — fetches `GET /admin_sidebar` on mount and renders
-  every row it gets back under the "Admin" heading (see
-  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)'s "Sidebar and menus").
-  No hardcoded link list anymore, except `Dashboard` itself. The
-  `userMenus` group is still in the component but hardcoded empty, left
-  for when non-admin menus get their own source.
+- **`AppSidebar.jsx`** composes **`UserSidebar.jsx`** (fetches
+  `GET /user_sidebar`, role-scoped) and **`AdminSidebar.jsx`** (fetches
+  `GET /admin_sidebar`, rendered only when `user.is_superadmin`) — see
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)'s "Sidebar and menus". No
+  hardcoded link list except `Dashboard` itself, which both routes
+  deliberately exclude (`is_dashboard = 0` / `is_protected` filters).
 - **`Dashboard.jsx`** — reads `user.role_id` and conditionally renders
   cards, and separately calls `/admin/users`, which the *backend*
   rejects for non-superadmins regardless of what the frontend shows.
@@ -431,15 +434,25 @@ The frontend mirror of §8. One route in `App.jsx` serves every module:
 - **`modules/roles/index.jsx`** is what "custom" looks like — a single
   `renderCell` prop that draws `is_superadmin` as a badge and
   `theme_color` as a colour swatch. Everything else is inherited.
-- **`NavbarContext.jsx`** and **`components/sidebar/AdminSidebar.jsx`**
-  are scaffolding, not features: the first holds a `title` state with its
-  `useEffect` commented out and nothing providing it, the second is an
-  empty file.
+- **`NavbarContext.jsx`** is still scaffolding: it holds a `title` state
+  with its `useEffect` commented out and nothing providing it.
+  **`components/sidebar/AdminSidebar.jsx`** is not scaffolding anymore —
+  it was an empty file; it now fetches `GET /admin_sidebar` and renders
+  the result through `SidebarMenuCard.jsx`.
+- **`SidebarContext.jsx`** and **`components/sidebar/SidebarMenuCard.jsx`**
+  / **`SidebarMenuCardMultiple.jsx`** are new: open/closed state, and the
+  single-link vs. expandable-group cards `UserSidebar.jsx` /
+  `AdminSidebar.jsx` render their rows through.
 
-The trap to remember: `Sidebar.jsx` builds its link from the `slug`
-column in `adm_admin_menuses`, but the backend finds the module by the
-`path` column in `adm_modules`. Nothing checks that those two agree, so a
-typo gives you a sidebar link that 404s while both rows look fine.
+The trap to remember, current version: `users_module.py`'s
+`table_fields` join uses `select` + `join.first`/`join.second` as its
+keys (see [docs/MODULES.md](docs/MODULES.md#joined-columns)) — a
+plausible-looking wrong pair, like `field`/`on`, fails **silently**: the
+joined column just doesn't appear in the response, no error anywhere.
+Same failure mode, one level down, for a `form_fields` key that names a
+column that doesn't actually exist (`role_id` instead of the real
+`id_adm_role`) — it's dropped from every write with no error either,
+since `form_columns` is filtered to real columns only.
 
 ### Styling and the role theme
 
@@ -516,14 +529,23 @@ Fix first — these are known-broken or known-open, not ideas:
 
 - **Put a role check on the module routes.** Right now any logged-in user
   can read every row of every module's table.
-- **Validate the `slug` / `path` pairing** between `adm_admin_menuses`
-  and `adm_modules`, or read the sidebar link from `adm_modules` instead.
+- **Hash the password in `users_module.py`.** `post_store`/`post_update`
+  write it to the column as-is; add `before_store()`/`before_update()`
+  overrides calling `auth.hash_password()`.
+- **Stop `password` from leaking through `GET /users` and
+  `GET /users/edit/<id>`.** It's a real column named in `form_fields` but
+  not `table_fields`, so `index_query()`'s `form_columns` fallback loop
+  selects it into every list/edit response — verified against the
+  running API, the bcrypt hash comes back. Fix: exclude
+  `type == "password"` fields from that loop. See
+  [docs/MODULES.md](docs/MODULES.md#known-gaps).
+
 Then build:
 
-- A create/edit form in `GeneratedModulePage` — the backend already sends
-  `formFields` and the browser currently ignores it.
-- A real Users module to replace the `users_module.py` stub, using
-  `before_store()` to hash the password.
+- A real Users module to replace the `users_module.py` stub — done: it
+  now has a real `table_fields`/`form_fields` (including a `role_name`
+  join and an `id_adm_role` FK-select), real `actions`, and
+  `bulk_actions`. What's still open is the two password items above.
 - Nest the sidebar by `parent_id` — the column is returned and unused.
 - Add a "create user" form in the frontend (admin-only) that calls `POST /register`.
 - Add refresh tokens (current JWT expires after 60 minutes, hardcoded in `auth.py`).

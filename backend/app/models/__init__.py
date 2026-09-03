@@ -7,7 +7,6 @@
 # package alone registers every table on Base.metadata (which is what
 # alembic's autogenerate diffs against -- see docs/MIGRATIONS.md).
 from app.models.admin import (
-    AdminMenuses,
     AdminRolesPrivileges,
     Menuses,
     Modules,
@@ -15,4 +14,4 @@ from app.models.admin import (
     User,
 )
 
-__all__ = ["Role", "User", "Modules", "Menuses", "AdminMenuses", "AdminRolesPrivileges"]
+__all__ = ["Role", "User", "Modules", "Menuses", "AdminRolesPrivileges"]

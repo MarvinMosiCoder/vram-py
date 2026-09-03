@@ -1,7 +1,7 @@
 """Adm Roles Privileges table
 
 Revision ID: 6a0712d68f1b
-Revises: 4a53b9d60757
+Revises: 253f97ec1dfd
 Create Date: 2026-09-02 16:57:49.939348
 
 """
@@ -13,7 +13,10 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '6a0712d68f1b'
-down_revision: Union[str, Sequence[str], None] = '4a53b9d60757'
+# Was '4a53b9d60757' (create_adm_admin_menuses), deleted along with the
+# adm_admin_menuses table and its model/schema. Spliced back onto the
+# revision before it so the chain is contiguous again.
+down_revision: Union[str, Sequence[str], None] = '253f97ec1dfd'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

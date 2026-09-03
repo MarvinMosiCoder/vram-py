@@ -45,24 +45,26 @@ backend/
       middleware.py    RequireAuthMiddleware — fail-closed 401 for any route
                         not in PUBLIC_PATHS, before the route even runs
     models/            SQLAlchemy tables, one file per table
-      role.py            Role         -> adm_roles
-      user.py            User         -> adm_users
-      module.py          Modules      -> adm_modules
-      menus.py           Menuses      -> adm_menuses
-      admin_menus.py     AdminMenuses -> adm_admin_menuses
+      role.py                    Role                 -> adm_roles
+      user.py                    User                 -> adm_users
+      module.py                  Modules              -> adm_modules
+      menus.py                   Menuses              -> adm_menuses
+      adm_roles_privileges.py    AdminRolesPrivileges -> adm_roles_privileges
       __init__.py        re-exports all five (see "Models and schemas" below)
     schemas/           Pydantic request/response shapes, mirroring models/
-      user.py            UserCreate, UserLogin, UserOut
-      token.py           Token
-      module.py          ModuleOut
-      menus.py           MenuOut
-      admin_menus.py     AdminMenu
+      user.py                    UserCreate, UserLogin, UserOut
+      token.py                   Token
+      module.py                  ModuleOut
+      menus.py                   MenuOut
+      adm_roles_privileges.py    AdminRolesPrivileges
       __init__.py        re-exports all of the above
     modules/           the dynamic module system (see "Dynamic modules")
       registry.py        CONTROLLERS dict + the @controller / @action decorators
       base.py            ModuleController — the shared, inherited CRUD surface
-      roles_module.py    RolesController -> adm_roles (metadata only, no code)
-      users_module.py    UsersController — a reachability demo, not a real module
+      roles_module.py    RolesController -> adm_roles (metadata + the
+                          permissions-matrix escalation, see MODULES.md)
+      users_module.py    UsersController -> adm_users — a real module now: a
+                          role_name join, an id_adm_role FK-select, bulk actions
       __init__.py        imports every module file; the import IS the registration
     api/
       routers.py       combines every feature router below — the only
@@ -71,7 +73,8 @@ backend/
       serializers.py   User -> UserOut, shared by auth.py and admin.py
       auth.py          /register, /login, /logout, /me
       dashboard.py     /dashboard
-      sidebar.py       /admin_sidebar
+      sidebar.py       /admin_sidebar (adm_modules), /user_sidebar (adm_menuses,
+                        role-scoped)
       admin.py         /admin/users
       editor.py        /editor/content
       dynamic.py       the three catch-all module routes — MUST be the last
@@ -80,12 +83,13 @@ backend/
   alembic.ini          alembic config — deliberately has no sqlalchemy.url;
                         env.py injects it from core/database.py
     seeders/           one file per seeder; the import IS the registration
-      base.py            Seeder — order, idempotency contract, run(db)
+      base.py            Seeder — order, idempotency contract, run(db); a
+                          seeder picks skip-if-exists or upsert-if-exists per row
       registry.py        SEEDERS dict + the @seeder decorator + discover()
       roles_seeder.py    adm_roles
       admin_user_seeder.py     adm_users (admin@vram.com)
-      modules_seeder.py        adm_modules
-      admin_menus_seeder.py    adm_admin_menuses
+      modules_seeder.py        adm_modules — upserts, so an edited MODULES
+                                entry is pushed on every run, not just inserted once
   seed.py              the seeder runner: `python seed.py [--list|<Name>…]`
 
 frontend/
@@ -109,13 +113,22 @@ frontend/
       panel/                     TopPanel (page header strip), ContentPanel
                                   (the card), Toast
       toast/DissapearingToast.jsx  rendered once by ToastProvider
-      sidebar/AdminSidebar.jsx   empty file, placeholder only
+      sidebar/UserSidebar.jsx    fetches GET /user_sidebar, renders "Menu"
+      sidebar/AdminSidebar.jsx   fetches GET /admin_sidebar, renders "Admin
+                                  Menu" (only when user.is_superadmin) —
+                                  used to be an empty placeholder file
+      sidebar/SidebarMenuCard.jsx          single link, active-state aware
+      sidebar/SidebarMenuCardMultiple.jsx  expandable group, auto-opens on
+                                            an active child route
       table/                     Table, TableHead, TableBody, TableRow,
                                   HeadData (<th>), RowData (<td>),
                                   RowActions (cluster), RowAction (icon button)
+    context/SidebarContext.jsx  open/closed state, read+driven by both
+                                 AppSidebar.jsx and AppNavbar.jsx's toggle button
     layout/Layout.jsx       the shell: AppNavbar / AppSidebar / AppContent / AppFooter
-    layout/AppNavbar.jsx    full-width top bar
-    layout/AppSidebar.jsx   fetches GET /admin_sidebar, renders it under "Admin"
+    layout/AppNavbar.jsx    full-width top bar, plus the mobile sidebar toggle
+    layout/AppSidebar.jsx   composes UserSidebar.jsx + AdminSidebar.jsx; fixed
+                             overlay below md, width-collapsing column at md+
     layout/AppContent.jsx   breadcrumbs + the scrolling region + ToastProvider
     layout/AppFooter.jsx    copyright strip
     pages/Login.jsx
@@ -127,6 +140,9 @@ frontend/
     pages/modules/roles/index.jsx          the Roles module's wrapper page
     pages/modules/roles/edit-permissions.jsx
                             /roles/edit-permissions/<id>, claimed by filename
+    pages/modules/users/add.jsx, edit.jsx, user-form.jsx
+                            /users/add, /users/edit/<id> — reachable only once
+                            UsersController sets use_add_route/use_edit_route
     pages/admvram/vramjsx/GeneratedModulePage.jsx
                             the shared module runtime — renders whatever
                              metadata render_index() sends; not per-module
@@ -248,8 +264,8 @@ describe, with the package `__init__.py` re-exporting everything:
 
 | | |
 |---|---|
-| `models/role.py`, `user.py`, `module.py`, `menus.py`, `admin_menus.py` | one SQLAlchemy table each |
-| `schemas/user.py`, `token.py`, `module.py`, `menus.py`, `admin_menus.py` | the Pydantic shapes for that area |
+| `models/role.py`, `user.py`, `module.py`, `menus.py`, `adm_roles_privileges.py` | one SQLAlchemy table each |
+| `schemas/user.py`, `token.py`, `module.py`, `menus.py`, `adm_roles_privileges.py` | the Pydantic shapes for that area |
 
 The re-exports aren't only a convenience — routes keep writing
 `from app import models` / `models.User` rather than a deep import per
@@ -356,52 +372,57 @@ See [API.md](API.md) for full request/response details on each route.
 
 ## Sidebar and menus
 
-Three tables sit in this area. Only one of them is currently served by a
-route — the split is mid-refactor, and this section describes where it
-actually stands rather than where it is heading.
+Two tables, two routes, two different access models — deliberately, not
+as an in-progress state. `adm_admin_menuses`, the table this section used
+to describe as "added 2026-08-30," was reverted the same cycle it was
+introduced: `AdminMenu`, `AdminMenuses`, its migration and its seeder are
+all gone, and `/admin_sidebar` was repointed at `adm_modules` instead.
 
 - **`adm_modules`** — a registerable feature area: `name`, `icon`,
   `path`, `table_name`, `controller`, `is_active`, and `is_protected`.
   `is_protected` does **not** mean "requires a role" — it marks a
-  built-in admin module (Users Management, Menu Management, etc.) as
-  opposed to a future user-generated one. Nothing joins to it any more
-  (see below), but it is no longer unread: `api/dynamic.py` resolves
-  every module request against it — see "Dynamic modules" below.
+  built-in admin module (Roles, Users Management, ...) as opposed to a
+  future user-generated one. Read by `api/dynamic.py` to resolve every
+  module request (see "Dynamic modules" below) **and** by
+  `GET /admin_sidebar`, filtered to `is_active = 1 AND is_protected = 1`.
+  Access here is a flat flag: every authenticated caller sees the same
+  admin-module list, no per-role filtering.
 - **`adm_menuses`** — one sidebar entry: `name`, `type`, `path`, `slug`,
   `icon`, `color`, `sorting`, `is_dashboard`, `parent_id` (FK ->
-  **`adm_menuses.id`**), and `id_adm_role` (FK -> `adm_roles.id`, who
-  can see it). No route reads it right now either.
-- **`adm_admin_menuses`** — the table behind the admin sidebar, added
-  2026-08-30. Same shape as `adm_menuses` minus `is_dashboard`,
-  `id_adm_role`, and any foreign key: `name`, `type`, `path`, `slug`,
-  `color`, `icon`, `parent_id`, `is_active`, `sorting`. Seeded with
-  `Roles` and `Menus` by `AdminMenusSeeder`, alongside the matching
-  `adm_modules` rows from `ModulesSeeder`. Both tables used to be seeded
-  by nothing at all, so a freshly migrated database had an empty sidebar
-  and no modules; `python seed.py` now covers them.
+  **`adm_menuses.id`**), and `id_adm_role` (FK -> `adm_roles.id`). Read by
+  the newer `GET /user_sidebar`. Access here is per-row: each menu
+  belongs to exactly one role, no join table — unlike `adm_modules`'
+  many-role privilege flags in `roles_module.py`'s `AdminRolesPrivileges`
+  join.
 
 **A menu's parent is another menu, not a module.** `adm_menuses` used to
 carry `patent_id`, a typo'd FK into `adm_modules.id`. Migration
 `253f97ec1dfd` renamed it to `parent_id` and re-pointed the FK at
 `adm_menuses.id`, so `NULL` means top level and any other value names the
-accordion group the entry sits under. Existing values were ids from a
-different table entirely, so the migration clears them rather than
-carrying meaningless numbers across. The `Modules.menuses` /
-`Menuses.module` relationship pair went away with the FK — the two tables
-have no link left.
+accordion group the entry sits under.
 
-`GET /admin_sidebar` (`api/sidebar.py`) reads `adm_admin_menuses`, keeps
-`is_active = 1`, orders by `sorting`, and returns a flat list of
-`schemas.AdminMenu`. No join, no nested `module` object, and **no role
-filter** — the table has no `id_adm_role` column, so every authenticated
-caller gets the same menu. See [api/sidebar.md](api/sidebar.md) for the
-before/after and the options for restoring role scoping.
+`GET /admin_sidebar` (`api/sidebar.py`) reads `adm_modules`, keeps
+`is_active = 1` and `is_protected = 1`, orders by `id`, and returns a
+flat list of `schemas.ModuleOut`. `GET /user_sidebar` reads `adm_menuses`
+instead: top-level rows (`parent_id IS NULL`) filtered to the caller's
+own `id_adm_role`, `is_active = 1`, `is_dashboard = 0`, and for each one a
+second query for its own children (`parent_id = <that row's id>`, same
+filters) — one level deep, matching Laravel's
+`CommonHelpers::sidebarMenu()`. Both routes share one `APIRouter` in
+`sidebar.py`; only `/user_sidebar` takes a `current_user` dependency,
+since only it needs a role to filter by. See
+[api/sidebar.md](api/sidebar.md) for the full response shapes.
 
-`Sidebar.jsx` puts the whole response under the "Admin" heading
-(`userMenus` is hardcoded empty) and renders it flat — `parent_id` is
-returned but not yet used to nest anything. `Dashboard` is a separate
-hardcoded link with no row in any table, since every signed-in user
-always sees it.
+`AppSidebar.jsx` composes `UserSidebar.jsx` (fetches `/user_sidebar`) and
+`AdminSidebar.jsx` (fetches `/admin_sidebar`, rendered only when
+`user.is_superadmin`), each mapping its rows through `SidebarMenuCard.jsx`
+(a single link) or `SidebarMenuCardMultiple.jsx` (an expandable group,
+auto-opening when a child route is active) depending on whether a menu
+row has children. `SidebarContext.jsx` holds the open/closed state both
+`AppSidebar.jsx` and the hamburger button in `AppNavbar.jsx` read and
+drive — a fixed overlay below the `md` breakpoint, a width-collapsing
+column at `md` and up. `Dashboard` is still a separate hardcoded link
+with no row in any table, since every signed-in user always sees it.
 
 ## Dynamic modules
 
@@ -472,11 +493,15 @@ how to add a module, and the Laravel mapping — is in
   stored token and falls back to logged-out.
 - **`ProtectedRoute`** reads `useAuth()` and redirects to `/login` if
   there's no user.
-- **`Sidebar`** fetches `GET /admin_sidebar` on mount and renders every
-  row it gets back under the "Admin" heading — see "Sidebar and menus"
-  above. It refetches only on mount, so a menu/role change elsewhere
+- **`UserSidebar`/`AdminSidebar`** each fetch their own route
+  (`/user_sidebar`, `/admin_sidebar`) on mount — see "Sidebar and menus"
+  above. Both refetch only on mount, so a menu/role change elsewhere
   requires a page reload to show up, same caveat as `AuthContext`'s
   `user`.
+- **`SidebarContext`** holds one boolean, `isSidebarOpen`, read and
+  written by `AppSidebar.jsx` (the panel itself, and the mobile
+  auto-close/open on a `matchMedia` resize listener) and `AppNavbar.jsx`
+  (the hamburger toggle button).
 - **`GeneratedModulePage`** holds its own local state per module — rows,
   pagination, search term, sort column and direction — and refetches
   whenever any of them changes. Nothing about a module lives in a
@@ -492,16 +517,23 @@ how to add a module, and the Laravel mapping — is in
 - **`NavbarContext`** exists but is inert: it holds a `title` state whose
   `useEffect` is commented out, and no component provides or consumes it
   yet. It is scaffolding for a per-page title, not a working feature.
-  `components/sidebar/AdminSidebar.jsx` is likewise an empty placeholder
-  file, and `components/table/RowActions.jsx` is a working component that
-  nothing renders yet.
+  `components/sidebar/AdminSidebar.jsx` used to be the same kind of
+  placeholder — it now fetches `GET /admin_sidebar` and renders through
+  `SidebarMenuCard.jsx`, same as its `UserSidebar.jsx` sibling.
+  `components/table/RowActions.jsx` is a working component that nothing
+  renders yet.
 
 A note on the sidebar-to-module link, since it crosses the whole stack:
-`Sidebar.jsx` builds each link from the row's `slug` in
-`adm_admin_menuses`, while `api/dynamic.py` resolves a module by `path`
-in `adm_modules`. There is no foreign key between the two tables and
-nothing validates the pair, so a mismatch is a sidebar link that 404s
-with both rows looking correct.
+`AdminSidebar.jsx` links each row by its `path` in `adm_modules` — the
+same column `api/dynamic.py` resolves a module by, so a module reachable
+by URL is reachable from the sidebar by construction, no separate table
+to drift out of sync with. `UserSidebar.jsx` is looser by necessity: a
+menu row's `path`/`slug` in `adm_menuses` isn't tied to any
+`adm_modules` row at all (a menu can point anywhere), so nothing
+validates that a menu's link actually resolves to something — a typo
+there is still a link that 404s with the row looking correct, just one
+level removed from the module system rather than two tables disagreeing
+with each other.
 
 ## Styling and theming
 

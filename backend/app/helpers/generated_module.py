@@ -119,6 +119,41 @@ class ModuleController:
             if join:
                 self.add_badge_columns(alias, join)
 
+    def resolved_form_fields(self):
+        """form_fields, with any FK-lookup select's `options` populated from
+        the table it names.
+
+        table_fields' `select`/`join` resolve a *display* value pulled from
+        another table for the list view; this is the write-side counterpart
+        -- a form_fields entry shaped like
+
+            "id_adm_role": {"label": "Role", "type": "select",
+                             "table": "adm_roles",
+                             "value_field": "id", "display_field": "name"}
+
+        gets its `options` filled with that table's live rows instead of a
+        module having to hardcode a snapshot of them. A field that already
+        declares `options` (an enum column, from build_meta()) is left
+        alone. Computed per-request, off a fresh dict, so the class-level
+        form_fields (shared by every request) is never mutated in place.
+        """
+        resolved = {}
+        for name, config in self.form_fields.items():
+            config = dict(config) if isinstance(config, dict) else {"label": config}
+            table_name = config.get("table")
+            if config.get("type") == "select" and table_name and "options" not in config:
+                table = Base.metadata.tables.get(table_name)
+                value_field = config.get("value_field", "id")
+                display_field = config.get("display_field", "name")
+                if table is not None and value_field in table.c and display_field in table.c:
+                    rows = self.db.execute(
+                        select(table.c[value_field], table.c[display_field])
+                        .order_by(table.c[display_field])
+                    ).all()
+                    config["options"] = [{"value": v, "label": d} for v, d in rows]
+            resolved[name] = config
+        return resolved
+
     def resolve_column(self, reference):
         """"adm_roles.name" -> that Column. A bare name means this table.
 
@@ -349,7 +384,7 @@ class ModuleController:
                 {"key": key, "label": config.get("label", key)}
                 for key, config in self.table_fields.items()
             ],
-            "formFields": self.form_fields,
+            "formFields": self.resolved_form_fields(),
             # permittedActions() upstream: the module's declaration ANDed
             # with the caller's privileges. moduleAccess() is the privilege
             # half on its own -- the React runtime takes both, and until

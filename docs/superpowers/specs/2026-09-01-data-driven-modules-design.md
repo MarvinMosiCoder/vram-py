@@ -332,3 +332,12 @@ today, so it is inert. Under this design, adding one would resolve to the demo
 class rather than to a generic data-driven module, because a class always wins
 over a row. Deleting the file is a reasonable follow-up but is not part of this
 spec.
+
+> **Update, 2026-09-03.** This paragraph is now historical along with the
+> rest of the superseded design above: `users_module.py` stopped being a
+> demo and became a real module (table, joined `role_name` display,
+> `id_adm_role` FK-select, bulk actions), and `adm_modules` has had a
+> `users` row this whole time — the class-always-wins-over-a-row
+> observation above was never actually exercised for it. See
+> [`../../MODULES.md`](../../MODULES.md#known-gaps) for where the module
+> currently stands.

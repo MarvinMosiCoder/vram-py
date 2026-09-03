@@ -18,6 +18,7 @@ class UserOut(BaseModel):
     theme_color: str | None = None
     role: str | None = None
     role_id: int | None = None
+    is_superadmin: bool = False
 
     class Config:
         from_attributes = True  # lets this read directly from a SQLAlchemy object

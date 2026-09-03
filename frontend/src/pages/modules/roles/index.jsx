@@ -13,7 +13,7 @@ export default function RolesPage() {
       modulePath="roles"
       renderCell={(row, column, defaultCell) => {
         if (column.key === "is_superadmin") {
-          return row.is_superadmin ? <span className="badge">Superadmin</span> : "—";
+          return row.is_superadmin ? <span className="badge">Superadmin</span> : "Normal";
         }
         if (column.key === "theme_color" && row.theme_color) {
           return (

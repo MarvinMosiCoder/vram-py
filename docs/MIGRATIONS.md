@@ -155,7 +155,7 @@ flowchart TD
     FK --> TV["15ec4b269023<br/>add token_version to adm_users"]
     TV --> MM["cdf659bd13b9<br/>create adm_modules + adm_menuses"]
     MM --> PI["253f97ec1dfd<br/>adm_menuses.patent_id → parent_id<br/>(self-FK, hand-written)"]
-    PI --> AM["4a53b9d60757<br/>create adm_admin_menuses"]
+    PI --> RP["6a0712d68f1b<br/>create adm_roles_privileges"]
 ```
 
 1. **`8bbdefcb8b73_create_roles_table.py`** — creates `roles` (`id`, `name`).
@@ -194,12 +194,29 @@ flowchart TD
    the migration clears them with `UPDATE adm_menuses SET parent_id =
    NULL` before adding the FK. `downgrade()` reverses all three steps,
    clearing the column again on the way back.
-9. **`4a53b9d60757_create_adm_admin_menuses.py`** — creates
-   `adm_admin_menuses` (`id`, `name`, `type`, `path`, `slug`, `color`,
-   `icon`, `parent_id`, `is_active`, `sorting`, `created_at`,
-   `updated_at`). No foreign keys: `parent_id` self-references by
-   convention only. This is the table `GET /admin_sidebar` reads — see
-   [ARCHITECTURE.md](ARCHITECTURE.md#sidebar-and-menus).
+9. **`6a0712d68f1b_adm_roles_privileges_table.py`** — creates
+   `adm_roles_privileges` (`id`, `is_visible`, `is_create`, `is_read`,
+   `is_edit`, `is_delete`, `is_void`, `is_override`, `id_adm_roles`,
+   `id_adm_modules`, `created_at`, `updated_at`) — no foreign keys, plain
+   integer columns naming the role/module by id. This is the per-(role,
+   module) CRUD-flag matrix `roles_module.py`'s permissions screen reads
+   and writes.
+
+   **This revision used to sit on top of a ninth migration,
+   `4a53b9d60757_create_adm_admin_menuses.py`** — `adm_admin_menuses`,
+   the table `GET /admin_sidebar` briefly read (see
+   [api/sidebar.md](api/sidebar.md#changed-on-2026-09-03)). That table
+   and its migration were reverted, and this file's `down_revision` was
+   hand-edited from `'4a53b9d60757'` back to `'253f97ec1dfd'` so the
+   chain stays contiguous with no gap — the file itself says so in a
+   comment. **Only safe because nothing had run `alembic upgrade head`
+   against `4a53b9d60757` yet.** A database that already applied it has
+   an `alembic_version` row alembic can no longer place on this chain at
+   all; `alembic downgrade -1` before deleting the file, or a manual
+   `UPDATE alembic_version SET version_num = '253f97ec1dfd'`, is what
+   that situation needs — neither is what happened here, but it's the
+   thing to check before deleting a migration file that might already be
+   applied somewhere.
 
 The first seven were written while the project was still on SQLite and
 replayed onto PostgreSQL with a single `alembic upgrade head` — no

@@ -27,7 +27,7 @@ from app.seeders import discover, ordered, SEEDERS
 
 # Tables a seeder writes to. Checked up front so a missing schema is one
 # clear message rather than a ProgrammingError from inside a seeder.
-REQUIRED_TABLES = ["adm_roles", "adm_users", "adm_modules", "adm_admin_menuses"]
+REQUIRED_TABLES = ["adm_roles", "adm_users", "adm_modules"]
 
 
 def check_schema():

@@ -13,7 +13,6 @@ from app.models.admin.menus import Menuses
 from app.models.admin.module import Modules
 from app.models.admin.role import Role
 from app.models.admin.user import User
-from app.models.admin.admin_menus import AdminMenuses
 from app.models.admin.adm_roles_privileges import AdminRolesPrivileges
 
-__all__ = ["Role", "User", "Modules", "Menuses", "AdminMenuses", "AdminRolesPrivileges"]
+__all__ = ["Role", "User", "Modules", "Menuses", "AdminRolesPrivileges"]

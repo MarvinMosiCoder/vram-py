@@ -754,7 +754,15 @@ export default function GeneratedModulePage({
                       />
                     ) : (
                       <TextInput
-                        type={config.type === "number" ? "number" : "text"}
+                        // Whitelisted, not a bare pass-through -- form_fields'
+                        // `type` also carries values with no matching <input
+                        // type>, like "textarea" and "select" (handled above).
+                        // An unrecognized type still has to fall back to text.
+                        type={
+                          ["number", "password", "email", "tel", "url", "date", "datetime-local", "time"].includes(config.type)
+                            ? config.type
+                            : "text"
+                        }
                         value={value}
                         maxLength={config.max}
                         readOnly={readOnly}

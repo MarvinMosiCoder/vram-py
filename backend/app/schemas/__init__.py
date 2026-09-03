@@ -6,13 +6,12 @@
 # re-exported here so routes keep using `from app import schemas` /
 # `schemas.UserOut`.
 from app.schemas.admin import (
-    AdminMenu,
     MenuOut,
     ModuleOut,
     Token,
     UserCreate,
     UserLogin,
-    UserOut,
+    UserOut
 )
 
 __all__ = [
@@ -21,6 +20,5 @@ __all__ = [
     "UserOut",
     "Token",
     "ModuleOut",
-    "MenuOut",
-    "AdminMenu",
+    "MenuOut"
 ]

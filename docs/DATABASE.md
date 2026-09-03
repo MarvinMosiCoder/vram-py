@@ -110,8 +110,8 @@ alembic upgrade head
 
 That replays every migration in `backend/alembic/versions/` in order and
 leaves you with `adm_roles`, `adm_users`, `adm_modules`, `adm_menuses`
-and `adm_admin_menuses`, plus alembic's own `alembic_version` bookkeeping
-table.
+and `adm_roles_privileges`, plus alembic's own `alembic_version`
+bookkeeping table.
 
 ## 5. Seed the starting data
 
