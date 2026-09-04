@@ -40,8 +40,6 @@ export function UserForm({ action, args = [] }) {
         const res = await api.get(isEdit ? `/users/edit/${id}` : "/users/add");
         if (cancelled) return;
         const row = res.data?.editRow;
-        // password is never prefilled from the fetched row, edit or not --
-        // the field means "set a new password", not "here is the current one".
         if (row) setValues({ ...BLANK_USER, ...row, password: "" });
         setRoleOptions(res.data?.formFields?.id_adm_role?.options ?? []);
       } catch {
@@ -54,7 +52,7 @@ export function UserForm({ action, args = [] }) {
       cancelled = true;
     };
   }, [isEdit, id]);
-
+  console.log("roleOptions", roleOptions, values);
   const set = (field) => (next) => setValues((prev) => ({ ...prev, [field]: next }));
 
   const validate = () => {
@@ -138,10 +136,11 @@ export function UserForm({ action, args = [] }) {
           <label className="form-field">
             <InputLabel value="Role" required />
             <SelectInput
-              value={values.id_adm_role}
+              type="react-select"
+              value={roleOptions.find((o) => o.value === values.id_adm_role) ?? null}
               options={roleOptions}
               placeholder="Choose a role"
-              onChange={(e) => set("id_adm_role")(e.target.value)}
+              onChange={(option) => set("id_adm_role")(option ? option.value : "")}
             />
             <InputError message={errors.id_adm_role} />
           </label>

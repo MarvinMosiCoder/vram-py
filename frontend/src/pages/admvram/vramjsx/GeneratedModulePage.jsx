@@ -143,6 +143,11 @@ const descriptor = (value) => (value && typeof value === "object" && !Array.isAr
 const formValue = (config, raw) =>
   config.type === "checkbox" ? (toBoolean(raw) ? 1 : 0) : raw ?? "";
 
+const EXPORT_FORMAT_OPTIONS = [
+  { value: "csv", label: "CSV" },
+  { value: "xlsx", label: "Excel (xlsx)" },
+];
+
 export default function GeneratedModulePage({
   modulePath,          // defaults to the :modulePath route param
   title,               // override the heading (defaults to the module name)
@@ -659,10 +664,7 @@ export default function GeneratedModulePage({
               <InputLabel value="Format" />
               <SelectInput
                 value={exportForm.fileformat}
-                options={[
-                  { value: "csv", label: "CSV" },
-                  { value: "xlsx", label: "Excel (xlsx)" },
-                ]}
+                options={EXPORT_FORMAT_OPTIONS}
                 onChange={(e) => setExportForm({ ...exportForm, fileformat: e.target.value })}
               />
             </label>
@@ -752,12 +754,28 @@ export default function GeneratedModulePage({
                         placeholder="—"
                         onChange={(e) => onChange(e.target.value)}
                       />
+                    ) : config.type === "react-select" ? (
+                      // Same FK-lookup field as "select" (resolved_form_fields()
+                      // fills `options` for both), styled with react-select
+                      // instead of the native control -- a module opts in per
+                      // field by declaring this type, e.g. users_module.py's
+                      // id_adm_role. Other modules' "select" fields are
+                      // unaffected.
+                      <SelectInput
+                        type="react-select"
+                        value={(config.options ?? []).find((o) => o.value === value) ?? null}
+                        options={config.options ?? []}
+                        disabled={readOnly}
+                        placeholder="—"
+                        onChange={(option) => onChange(option ? option.value : "")}
+                      />
                     ) : (
                       <TextInput
                         // Whitelisted, not a bare pass-through -- form_fields'
                         // `type` also carries values with no matching <input
-                        // type>, like "textarea" and "select" (handled above).
-                        // An unrecognized type still has to fall back to text.
+                        // type>, like "textarea", "select" and "react-select"
+                        // (all handled above). An unrecognized type still has
+                        // to fall back to text.
                         type={
                           ["number", "password", "email", "tel", "url", "date", "datetime-local", "time"].includes(config.type)
                             ? config.type

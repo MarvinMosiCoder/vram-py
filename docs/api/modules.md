@@ -194,6 +194,21 @@ Note that `store` returns `403 Denied access.` when the module's `actions`
 does not declare `create` — that is `require()` working, not a bug. See
 [../MODULES.md](../MODULES.md#the-modulecontroller-contract).
 
+**`/users/store` and `/users/update` do not match the shapes above.**
+`UsersController` overrides both with its own `_save_users()` instead of
+inheriting the base implementation documented here — see
+[../MODULES.md](../MODULES.md#adding-a-module)'s note on
+`users_module.py`. Two concrete differences, verified against the running
+API:
+
+| | Documented above | `/users/store` and `/users/update` |
+|---|---|---|
+| Success body | `{"message", "status", "id"}` / `{"message", "status"}` | `{}` — `_save_users()` returns the raw SQLAlchemy row, which serializes to nothing once the session's post-commit expiry clears it |
+| Validation failure | `422`, field-keyed dict | `400`, a single string in `detail` (`"name is required."` / `"Email must be unique."`) |
+
+Every other module still gets the documented shapes; this is a
+per-module deviation, not a change to the base `ModuleController`.
+
 ---
 
 ## `GET /{module_path}/add` and `GET /{module_path}/edit/{id}`

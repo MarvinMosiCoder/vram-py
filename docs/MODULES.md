@@ -345,6 +345,19 @@ self.table.c]`, so `role_id` on a table whose FK is actually
 `id_adm_role` is silently dropped from every write, same failure mode as
 a wrong join key.
 
+**`type: "react-select"` is the same field, styled differently.**
+`resolved_form_fields()` resolves `options` for it exactly like `"select"`
+— the two types share one gate in `generated_module.py` — so everything
+above applies unchanged. The only difference is which frontend widget
+`GeneratedModulePage.jsx`'s form-field renderer picks: `"select"` is the
+plain native `<select>` every module has always gotten, `"react-select"`
+opts one field into the styled `react-select` control instead. It is a
+per-field choice made by the controller that declares the field, not a
+project-wide setting — `users_module.py`'s `id_adm_role` is the only
+field using it today; every other module's `"select"` fields render
+exactly as before. See `frontend/src/components/form/SelectInput.jsx`,
+which is the component both branches render through.
+
 ### Bulk actions
 
 `POST /<path>/bulk-action`, body `{"selectedIds": [1, 2], "bulkAction": "delete"}`.
@@ -396,23 +409,59 @@ So neither half can offer a button whose endpoint would answer `403`.
 `users_module.py` used to be that reachability test — a stub `get_index`
 and a `not_reachable()` method with no `@action`, proving a bare method
 404s. It is a real module now: `table_fields`/`form_fields` as declared
-above (the `role_name` join, the `id_adm_role` FK-select), `actions`
-without `"delete"` (present-but-absent is off, same as `False`), and
-`bulk_actions = True` — which only keeps the toolbar's *infrastructure*
-switched on. With no `status`-named `form_fields` key and `"delete"`
-absent, `bulkOptions` on the frontend has nothing to put in it regardless
-of that flag; see [Bulk actions](#bulk-actions) above for the three
-things that actually populate the dropdown.
+above (the `role_name` join, the `id_adm_role` FK-select — styled with
+`type: "react-select"` rather than the plain `"select"` every other
+module uses; see [FK-select form fields](#fk-select-form-fields)),
+`actions` without `"delete"` (present-but-absent is off, same as
+`False`), and `bulk_actions = True` — which only keeps the toolbar's
+*infrastructure* switched on. With no `status`-named `form_fields` key
+and `"delete"` absent, `bulkOptions` on the frontend has nothing to put
+in it regardless of that flag; see [Bulk actions](#bulk-actions) above
+for the three things that actually populate the dropdown.
+`use_add_route`/`use_edit_route` are both `True`, so New/Edit navigate to
+`/users/add` and `/users/edit/<id>` — a dedicated
+`pages/modules/users/` page, not the shared runtime's inline panel.
 
-Two gaps left open on the write side, worth knowing before extending
-this module further: `post_store`/`post_update` write `password` to the
-column unhashed (no `before_store`/`before_update` override yet), and
-`index_query()` currently selects `password` into every list/edit
-response — a real column named in `form_fields` but not in
-`table_fields` gets pulled in by the `form_columns` loop in
-`index_query()`, the same mechanism that (correctly) makes `id_adm_role`
-available to prefill the edit form's Role select. The fix is a `type ==
-"password"` exclusion in that loop; it just hasn't landed yet.
+**`post_store`/`post_update` are a full rung-3 override, not the base
+ladder** — see [The create/update ladder](#the-create-update-ladder).
+`_save_users()` builds and commits a `User` row itself: it hashes
+`password` with `auth.hash_password()` before writing (closing the
+plaintext-write gap that used to be here) and checks email uniqueness by
+hand, but it never calls `super()` or goes through `validate()` /
+`payload()` / the timestamp stamps, so three things quietly diverge from
+every other module:
+
+- `has_created_at = True` / `has_updated_at = True` are declared but do
+  nothing — nothing in `_save_users()` reads them, so `created_at` and
+  `updated_at` are left `NULL` on every row this path writes. Verified
+  against the running API: a user created through `/users/add` has both
+  columns `NULL`, while a row written before this override existed still
+  carries real timestamps.
+- The response body is `{}`, not the `{"message", "status", "id"}` /
+  `{"message", "status"}` shape [api/modules.md](api/modules.md)
+  documents for `/store` and `/update` on every other module —
+  `_save_users()` returns the raw SQLAlchemy `User` instance, which
+  FastAPI's default JSON encoding reduces to an empty object once the
+  session's post-commit attribute expiry has cleared its `__dict__`.
+- A missing required field or a duplicate email raises `HTTPException(400, "...")`
+  — a flat string, not the `422` field-keyed dict `validate()` produces
+  everywhere else, so `user-form.jsx`'s `errors[field]` inline display
+  never fires for these two checks; only the toast fallback does.
+
+None of this is a route-level guard, so it is easy to miss until you
+compare `/users/store`'s actual response to `/roles/store`'s. See
+[api/modules.md](api/modules.md#post-modulepathstore) for the documented
+per-route deviation.
+
+**The GET-leak gap is still open**, narrower than before but not fixed:
+`index_query()` still selects `password` into every list/edit response —
+a real column named in `form_fields` but not in `table_fields` gets
+pulled in by the `form_columns` loop in `index_query()`, the same
+mechanism that (correctly) makes `id_adm_role` available to prefill the
+edit form's Role select. What comes back is now a bcrypt hash rather than
+plaintext, since writes are hashed, but it is still a column the module
+never intended to expose. The fix is a `type == "password"` exclusion in
+that loop; it still hasn't landed.
 
 ### Custom actions
 

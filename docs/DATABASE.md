@@ -143,7 +143,7 @@ alembic current          # from backend/, with the venv active
 
 You should see the six tables, and a revision id matching the last entry
 in [MIGRATIONS.md](MIGRATIONS.md#this-projects-migration-history) —
-currently `4a53b9d60757`. To check the seed:
+currently `6a0712d68f1b`. To check the seed:
 
 ```powershell
 psql -h localhost -U vram -d vram_admin -c "SELECT id, email, id_adm_role FROM adm_users;"
@@ -201,6 +201,7 @@ and the connection URL untouched, so nothing else needs reconfiguring.
 | `ModuleNotFoundError: No module named 'psycopg2'` | Dependencies not installed, or installed into a different venv. Activate the venv, then `pip install -r requirements.txt`. |
 | `permission denied for schema public` | The `vram` role doesn't own the database: `psql -U postgres -c "ALTER DATABASE vram_admin OWNER TO vram;"` and, on PG 15+, `psql -U postgres -d vram_admin -c "GRANT ALL ON SCHEMA public TO vram;"`. |
 | `relation "adm_users" does not exist` at runtime | The database exists but the tables don't — run `alembic upgrade head` (step 4). |
+| `Can't locate revision identified by '<hash>'` from any alembic command | `alembic_version` names a migration file that no longer exists, so alembic can't place the database on the chain. Recover with `alembic stamp --purge <the deleted revision's parent>` — see [MIGRATIONS.md](MIGRATIONS.md#if-alembic-cant-locate-a-revision). |
 | `psql : The term 'psql' is not recognized` | Not on PATH — use the full `C:\Program Files\PostgreSQL\17\bin\psql.exe`, see step 1. |
 | Port 5432 already in use | An older PostgreSQL is still installed and running. Stop it, or install on another port and update the port in `DATABASE_URL`. |
 

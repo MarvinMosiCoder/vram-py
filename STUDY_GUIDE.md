@@ -529,25 +529,44 @@ Fix first — these are known-broken or known-open, not ideas:
 
 - **Put a role check on the module routes.** Right now any logged-in user
   can read every row of every module's table.
-- **Hash the password in `users_module.py`.** `post_store`/`post_update`
-  write it to the column as-is; add `before_store()`/`before_update()`
-  overrides calling `auth.hash_password()`.
+- **Hash the password in `users_module.py` — done, 2026-09-04**, but not
+  the way this bullet used to suggest. `post_store`/`post_update` are a
+  full custom override (`_save_users()`) rather than
+  `before_store()`/`before_update()` hooks on the base class, so it
+  bypasses the base ladder entirely — `has_created_at`/`has_updated_at`
+  are declared but never stamped, the response body is `{}` instead of
+  the usual `{"message", "status", ...}`, and validation is a flat `400`
+  instead of the usual field-keyed `422`. See
+  [docs/MODULES.md](docs/MODULES.md#adding-a-module) and
+  [docs/api/modules.md](docs/api/modules.md#post-modulepathstore) for
+  what actually changed.
 - **Stop `password` from leaking through `GET /users` and
-  `GET /users/edit/<id>`.** It's a real column named in `form_fields` but
-  not `table_fields`, so `index_query()`'s `form_columns` fallback loop
-  selects it into every list/edit response — verified against the
-  running API, the bcrypt hash comes back. Fix: exclude
-  `type == "password"` fields from that loop. See
+  `GET /users/edit/<id>`.** Still open. It's a real column named in
+  `form_fields` but not `table_fields`, so `index_query()`'s
+  `form_columns` fallback loop selects it into every list/edit response —
+  verified against the running API, the value that comes back is now a
+  bcrypt hash rather than plaintext (writes are hashed as of the bullet
+  above), but it is still exposed. Fix: exclude `type == "password"`
+  fields from that loop. See
   [docs/MODULES.md](docs/MODULES.md#known-gaps).
 
 Then build:
 
 - A real Users module to replace the `users_module.py` stub — done: it
   now has a real `table_fields`/`form_fields` (including a `role_name`
-  join and an `id_adm_role` FK-select), real `actions`, and
-  `bulk_actions`. What's still open is the two password items above.
+  join and a `react-select`-styled `id_adm_role` FK-select), real
+  `actions`, and `bulk_actions`. `use_add_route`/`use_edit_route` are on
+  too, so New/Edit reach the dedicated `pages/modules/users/` form
+  instead of the shared runtime's inline panel — that page is also where
+  the create/edit-user admin form below now lives. What's still open is
+  the password-leak item above.
 - Nest the sidebar by `parent_id` — the column is returned and unused.
-- Add a "create user" form in the frontend (admin-only) that calls `POST /register`.
+- ~~Add a "create user" form in the frontend (admin-only) that calls
+  `POST /register`.~~ Done, differently and more completely than this
+  originally asked: `pages/modules/users/add.jsx` (superadmin-only, same
+  as every module route) calls `POST /users/store`, which — unlike
+  `/register` — also assigns a role at creation time instead of leaving
+  `id_adm_role` `null`.
 - Add refresh tokens (current JWT expires after 60 minutes, hardcoded in `auth.py`).
 - Move `SECRET_KEY` out of the code and into an environment variable.
 - Move `DATABASE_URL` out of `database.py` as well — the Postgres

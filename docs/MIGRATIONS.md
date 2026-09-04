@@ -13,7 +13,8 @@ Alembic reads the connection string from `backend/app/core/database.py`
 ## Steps to run a migration
 
 1. Add or change a model in `backend/app/models/` — one file per table
-   (`role.py`, `user.py`, `module.py`, `menus.py`, `admin_menus.py`). A
+   (`role.py`, `user.py`, `module.py`, `menus.py`,
+   `adm_roles_privileges.py`), all under `models/admin/`. A
    new `Column(...)` in an
    existing file needs nothing else; a **new table** means a new file *and* a
    re-export line in `backend/app/models/__init__.py`, or alembic won't see
@@ -66,6 +67,59 @@ or, again without `psql`:
 cd backend
 python -c "from sqlalchemy import inspect; from app.core.database import engine; print(inspect(engine).get_table_names())"
 ```
+
+## If alembic can't locate a revision
+
+```
+ERROR [alembic.util.messaging] Can't locate revision identified by '4a53b9d60757'
+FAILED: Can't locate revision identified by '4a53b9d60757'
+```
+
+The `alembic_version` table names a revision that no file in
+`alembic/versions/` declares, so alembic cannot place the database on the
+chain and refuses to do anything at all. **Every** command fails this way,
+`alembic current` included — there is no read-only command that still
+works, which is why the message looks identical whatever you were trying
+to run.
+
+It means a migration file was deleted (or never pulled) *after* this
+database had already applied it. That is exactly what happened with
+`4a53b9d60757`, the reverted `adm_admin_menuses` migration — see
+[the history below](#this-projects-migration-history).
+
+The fix is to re-point `alembic_version` at a revision that does exist,
+normally the deleted one's parent:
+
+```bash
+cd backend
+alembic stamp --purge 253f97ec1dfd
+alembic upgrade head
+```
+
+`--purge` is the load-bearing flag. A plain `alembic stamp` resolves the
+*current* revision before moving away from it, so it fails with the same
+error you are trying to escape; `--purge` erases the version table first
+and writes the new value into an empty one. `UPDATE alembic_version SET
+version_num = '253f97ec1dfd'` in `psql` does the same thing by hand.
+
+Two things to check afterwards, because stamping is bookkeeping and
+changes no tables:
+
+- **Whatever the deleted migration created is still there**, orphaned,
+  and nothing will ever drop it now that its `downgrade()` is gone:
+  ```bash
+  psql -h localhost -U vram -d vram_admin -c "DROP TABLE adm_admin_menuses;"
+  ```
+- **Every revision after the stamped one is unapplied.** The `alembic
+  upgrade head` above is what catches the database up; `alembic current`
+  should then match the last entry in
+  [this project's migration history](#this-projects-migration-history).
+
+If the deleted file is still recoverable (`git show <commit>:<path>` will
+print it), the tidier route is to restore it, run `alembic downgrade -1`
+so its own `downgrade()` drops its table properly, then delete it again —
+no orphan to clean up by hand. `--purge` is for when the file is already
+gone.
 
 ---
 
@@ -134,6 +188,8 @@ Run these from `backend/`.
 | `alembic downgrade -1` | Undo the most recently applied migration. |
 | `alembic downgrade base` | Undo everything, back to an empty schema. |
 | `alembic stamp head` | Mark the database as being at `head` **without running any migrations.** |
+| `alembic stamp <rev>` | The same, at a specific revision rather than the latest. |
+| `alembic stamp --purge <rev>` | Erase the version table *first*, then stamp. The recovery for a version row alembic can no longer resolve — see [If alembic can't locate a revision](#if-alembic-cant-locate-a-revision). |
 
 `stamp` doesn't touch any tables — it only writes a revision id into the
 `alembic_version` table, telling Alembic "trust me, the schema already
@@ -142,6 +198,11 @@ match and you don't need a reviewable migration file (e.g. bootstrapping
 Alembic onto a database that already has the right tables). It's bookkeeping,
 not a schema change — prefer the drop-and-regenerate approach above when you
 want an honest, replayable history.
+
+`--purge` is the exception to "use it only when the schema already
+matches": there, the schema is not the problem and the version row is, and
+it is the only form of `stamp` that works when alembic cannot resolve what
+the database currently claims to be.
 
 ### This project's migration history
 
@@ -209,14 +270,19 @@ flowchart TD
    and its migration were reverted, and this file's `down_revision` was
    hand-edited from `'4a53b9d60757'` back to `'253f97ec1dfd'` so the
    chain stays contiguous with no gap — the file itself says so in a
-   comment. **Only safe because nothing had run `alembic upgrade head`
-   against `4a53b9d60757` yet.** A database that already applied it has
-   an `alembic_version` row alembic can no longer place on this chain at
-   all; `alembic downgrade -1` before deleting the file, or a manual
-   `UPDATE alembic_version SET version_num = '253f97ec1dfd'`, is what
-   that situation needs — neither is what happened here, but it's the
-   thing to check before deleting a migration file that might already be
-   applied somewhere.
+   comment. **That is only safe on a database that never applied
+   `4a53b9d60757` — and at least one had.** A database that did has an
+   `alembic_version` row alembic can no longer place on this chain at
+   all, so every command against it fails with `Can't locate revision
+   identified by '4a53b9d60757'`, `alembic current` included. Recovery is
+   `alembic stamp --purge 253f97ec1dfd`, then `alembic upgrade head` —
+   which applies *this* revision for the first time, since it had been
+   sitting unreachable behind the broken version row — plus a manual
+   `DROP TABLE adm_admin_menuses` for the orphan the deleted migration
+   left behind. Full walkthrough:
+   [If alembic can't locate a revision](#if-alembic-cant-locate-a-revision).
+   Worth checking before deleting any migration file that might already
+   be applied somewhere.
 
 The first seven were written while the project was still on SQLite and
 replayed onto PostgreSQL with a single `alembic upgrade head` — no

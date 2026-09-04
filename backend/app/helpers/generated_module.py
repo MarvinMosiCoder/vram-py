@@ -134,14 +134,17 @@ class ModuleController:
         gets its `options` filled with that table's live rows instead of a
         module having to hardcode a snapshot of them. A field that already
         declares `options` (an enum column, from build_meta()) is left
-        alone. Computed per-request, off a fresh dict, so the class-level
-        form_fields (shared by every request) is never mutated in place.
+        alone. `type: "react-select"` gets the same resolution as
+        `"select"` -- it is the same FK-lookup field, styled differently by
+        the frontend; see users_module.py's `id_adm_role`. Computed
+        per-request, off a fresh dict, so the class-level form_fields
+        (shared by every request) is never mutated in place.
         """
         resolved = {}
         for name, config in self.form_fields.items():
             config = dict(config) if isinstance(config, dict) else {"label": config}
             table_name = config.get("table")
-            if config.get("type") == "select" and table_name and "options" not in config:
+            if config.get("type") in ("select", "react-select") and table_name and "options" not in config:
                 table = Base.metadata.tables.get(table_name)
                 value_field = config.get("value_field", "id")
                 display_field = config.get("display_field", "name")
