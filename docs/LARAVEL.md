@@ -25,6 +25,23 @@ Everything in this file is either a stock Laravel 10/11 + Eloquent +
 Inertia behaviour or a file you can open in this repo. Where a mapping is
 an inference rather than something the code states, it says so.
 
+## The Laravel original, on disk
+
+The template being ported is not hypothetical — it's installed locally at
+`C:/laragon/www/vram`, a working Laravel + Inertia app. Open it directly
+whenever a mapping below is worth checking against the real thing;
+several claims elsewhere in this repo's docs already cite exact paths
+inside it (e.g. [ARCHITECTURE.md](ARCHITECTURE.md#the-component-family)'s
+component-naming table).
+
+It carries its own documentation at `C:/laragon/www/vram/docs/vram/`
+(`architecture.md`, `generated-modules.md`, `admin-features.md`,
+`frontend.md`, `dashboard-builder.md`, `change-process.md`,
+`CHANGELOG.md`) — read those alongside this repo's `docs/` when the
+question is "what did the original actually do here," rather than
+inferring it from this file's summary. `../CLAUDE.md` at the repo root
+has the file-by-file correspondence table and what's ported vs. not yet.
+
 ## The big table
 
 | Concept | Laravel | Vram Admin (Python) | Notes |

@@ -1,18 +1,5 @@
 @import "tailwindcss";
 
-/* --- Shared design tokens ------------------------------------------
-   Tailwind v4 is configured here rather than in a tailwind.config.js.
-   Every token below points at one of the project's own custom properties,
-   so the utility classes and the hand-written CSS read from ONE palette --
-   which means `bg-skin-accent` follows the signed-in user's role theme for
-   free, exactly like .sidebar-link.active does.
-
-   `static` makes Tailwind emit every token even when no utility uses it
-   yet -- without it v4 tree-shakes unused ones, so `var(--color-skin-*)`
-   would be undefined in hand-written CSS.
-
-   Deliberately no font tokens: --font-body / --font-mono already live on
-   :root below, and redefining them here would collide. */
 @theme static {
   --color-skin-bg:          var(--bg);
   --color-skin-panel:       var(--panel);
@@ -23,10 +10,6 @@
   --color-skin-accent-dim:  var(--accent-dim);
   --color-skin-accent-soft: var(--accent-soft);
   --color-skin-danger:      var(--danger);
-
-  /* Used by RowData.jsx as `bg-black-table-color`, carried over from the
-     Laravel template's own Tailwind theme. Without a token here the class
-     compiles to nothing. */
   --color-black-table-color: var(--panel);
 }
 
@@ -36,11 +19,6 @@
   --panel-border: #262b35;
   --text: #e7e6e1;
   --text-dim: #8a8f9c;
-  /* applyThemeColor() in config/themeOptions.js writes the --app-theme-*
-     tokens (ported verbatim from the Laravel project). The project's own
-     --accent* names are aliases onto them, so every existing rule keeps
-     working and a theme change moves both sets at once. The fallbacks are the
-     original green, used before any theme has been applied. */
   --app-theme-color: #3ecf8e;
   --app-theme-contrast: #0b0d10;
   --app-theme-readable: #2a8f63;
@@ -54,15 +32,9 @@
   --accent-dim: var(--app-theme-readable);
   --accent-soft: var(--app-theme-soft-strong);
   --danger: #e2665a;
-  --font-body: 'Inter', system-ui, sans-serif;
+  --font-body: 'Poppins', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
-
-/* --- Theme surfaces -----------------------------------------------
-   Only one skin swaps the page surfaces rather than just the accent --
-   skin-black, which ThemeContext toggles as .app-theme-dark. Every other
-   skin is an accent change, applied through the --app-theme-* tokens above,
-   so there is no longer a palette block per skin. */
 :root.app-theme-dark {
   --bg: #07080a;
   --panel: #101318;
@@ -268,12 +240,6 @@ button:hover { background: var(--accent-dim); color: var(--text); }
   font-size: 13px;
 }
 .signout:hover { color: var(--text); background: var(--panel-border); }
-
-/* --- Generated module pages ---------------------------------------- */
-.module-page { /* layout only -- the card itself comes from .content-panel */ }
-
-/* A panel nested inside another panel: recessed rather than raised, so it
-   does not read as a card-inside-an-identical-card. */
 .content-panel.is-inset {
   background: var(--bg);
   border-color: var(--panel-border);
@@ -371,11 +337,6 @@ button:hover { background: var(--accent-dim); color: var(--text); }
   display: inline-block;
 }
 
-/* --- Row actions ---------------------------------------------------
-   Replaces RowActions.jsx's original Tailwind utilities
-   ("flex items-center justify-center gap-2"). Those would work now that
-   Tailwind is installed, but this also styles the buttons inside the
-   cluster, which the bare layout utilities did not. */
 .row-actions {
   display: flex;
   align-items: center;
@@ -586,8 +547,7 @@ button:hover { background: var(--accent-dim); color: var(--text); }
   border-radius: 10px;
   background: var(--panel);
 }
-/* The frame owns the border and radius now, so the table inside must not
-   draw its own or they double up on the edges. */
+
 .table-container > .module-table { border: none; border-radius: 0; }
 .module-table th.is-plain { cursor: default; }
 .module-table th.is-plain:hover { color: var(--text-dim); }
@@ -595,9 +555,7 @@ button:hover { background: var(--accent-dim); color: var(--text); }
 .module-table tr.is-selected { background: var(--accent-soft); }
 .sort-caret { color: var(--accent); }
 
-/* --- App shell regions ---------------------------------------------
-   AppContent is the only scrolling region; AppFooter is pinned under it and
-   AppNavbar/AppSidebar stay put. Ported from Layouts/layout/layout.jsx. */
+
 .app-content {
   flex: 1 1 auto;
   min-height: 0;
@@ -705,3 +663,198 @@ button:hover { background: var(--accent-dim); color: var(--text); }
   font-size: 11px;
   font-weight: 600;
 }
+
+/* --- Navbar -----------------------------------------------------------
+   layout/AppNavbar.jsx and the components/avatar/, components/modal/
+   pair it introduced when the navbar was ported off the Laravel/Inertia
+   original -- see CLAUDE.md for the file-by-file mapping. */
+
+.top-bar-left, .top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.sidebar-toggle {
+  display: none;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  color: var(--text-dim);
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.sidebar-toggle:hover { background: var(--panel-border); color: var(--text); }
+@media (max-width: 767px) { .sidebar-toggle { display: inline-flex; } }
+
+.top-bar-brand {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.top-bar-brand:hover { color: var(--accent); }
+
+.top-bar-clock {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 13px;
+  white-space: nowrap;
+}
+@media (min-width: 1024px) { .top-bar-clock { display: flex; } }
+
+.top-bar-user { position: relative; }
+.top-bar-user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  margin: 0;
+  padding: 0;
+  width: auto;
+  cursor: pointer;
+  color: var(--text);
+}
+.top-bar-user-name {
+  display: none;
+  font-size: 13px;
+  font-weight: 500;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (min-width: 768px) { .top-bar-user-name { display: inline-block; } }
+.top-bar-user-caret {
+  font-size: 11px;
+  color: var(--text-dim);
+  transition: transform 0.15s ease;
+}
+.top-bar-user-caret.is-open { transform: rotate(180deg); }
+
+.top-bar-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  width: 260px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  padding: 14px 0;
+  z-index: 150;
+}
+.top-bar-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.top-bar-menu-identity { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.top-bar-menu-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.top-bar-menu-email {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.top-bar-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 9px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.top-bar-menu-item:hover { background: var(--panel-border); }
+.top-bar-menu-item.is-danger { color: var(--danger); }
+.top-bar-menu-item.is-danger:hover { background: rgba(226, 102, 90, 0.14); }
+
+/* Avatar/ */
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  /* Fixed dark text, not var(--text) -- these sit on light Tailwind
+     pastel-300 swatches regardless of app theme, so a themed (possibly
+     light-on-dark) color would go unreadable in dark mode. */
+  color: #1f2937;
+  font-weight: 600;
+  overflow: hidden;
+}
+.avatar-md { width: 36px; height: 36px; font-size: 13px; }
+.avatar-lg { width: 48px; height: 48px; font-size: 16px; }
+
+/* Modal/ */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 16px;
+}
+.modal-dialog {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 420px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.modal-head { display: flex; align-items: center; gap: 10px; }
+.modal-head i { color: var(--accent); }
+.modal-title { margin: 0; font-size: 15px; flex: 1; }
+.modal-close {
+  width: auto;
+  margin: 0;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.modal-close:hover { background: transparent; color: var(--text); }
+.modal-text { margin: 0; font-size: 13px; color: var(--text-dim); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.modal-actions button { width: auto; margin: 0; }
