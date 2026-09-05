@@ -23,8 +23,6 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function login(email, password) {
-    // FastAPI's OAuth2PasswordRequestForm expects form-encoded data,
-    // not JSON, and field names "username"/"password".
     const form = new URLSearchParams();
     form.append("username", email);
     form.append("password", password);

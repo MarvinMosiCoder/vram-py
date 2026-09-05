@@ -4,7 +4,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { SidebarProvider } from "./context/SidebarContext";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Layout from "./layout/Layout";
-import Login from "./pages/Login";
+import Login from "./pages/auth/Login";
 import Dashboard from "./pages/Dashboard";
 import ModuleRoute from "./pages/ModuleRoute";
 
