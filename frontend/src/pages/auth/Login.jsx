@@ -16,6 +16,23 @@ function validateLogin(email, password) {
   return "";
 }
 
+function getApiErrorMessage(error) {
+  const detail = error.response?.data?.detail;
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => item.msg)
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  return "Login failed. Please try again.";
+}
+
 const LoginLoaderOverlay = () => (
   <div className="login-loading-overlay">
     <div className="login-loading-pill">
@@ -80,7 +97,7 @@ export default function LoginPage() {
       await login(email.trim(), password);
       navigate("/dashboard");
     } catch (err) {
-      setError(err.response?.data?.detail || "Login failed. Please try again.");
+      setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
     }

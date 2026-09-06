@@ -16,7 +16,11 @@ const Avatar = ({ name, size = "md" }) => {
   const bgClass = colorMap[initials.charAt(0)] || "bg-slate-300";
 
   return (
-    <div className={`avatar avatar-${size} ${bgClass}`}>
+    <div
+      className={`flex shrink-0 items-center justify-center rounded-full border border-skin-border font-semibold text-gray-800 ${
+        size === "lg" ? "h-12 w-12 text-base" : "h-9 w-9 text-[13px]"
+      } ${bgClass}`}
+    >
       <span>{initials}</span>
     </div>
   );

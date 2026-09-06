@@ -6,6 +6,7 @@ from app.schemas.admin.module import ModuleOut
 from app.schemas.admin.token import Token
 from app.schemas.admin.user import UserCreate, UserLogin, UserOut
 from app.schemas.admin.adm_roles_privileges import AdminRolesPrivileges
+from app.schemas.admin.adm_settings import AdmSettingsOut
 
 __all__ = [
     "UserCreate",
@@ -15,4 +16,5 @@ __all__ = [
     "ModuleOut",
     "MenuOut",
     "AdminRolesPrivileges",
+    "AdmSettingsOut",
 ]

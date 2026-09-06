@@ -6,18 +6,29 @@ from app.core.database import get_db
 from app import models, schemas
 from app.core import auth
 from app.api.serializers import user_out
+from pydantic import EmailStr, TypeAdapter, ValidationError
+
+email_adapter = TypeAdapter(EmailStr)
 
 router = APIRouter(tags=["auth"])
 
 
 @router.post("/register", response_model=schemas.UserOut)
 def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(models.User).filter(models.User.email == user_in.email).first()
+    try:
+        email = str(email_adapter.validate_python(user_in.email)).lower()
+    except ValidationError:
+        raise HTTPException(
+            status_code=422,
+            detail="Please enter a valid email address",
+        )
+
+    existing = db.query(models.User).filter(models.User.email == email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
     new_user = models.User(
-        email=user_in.email,
+        email=email,
         password=auth.hash_password(user_in.password),
     )
     db.add(new_user)
@@ -29,8 +40,28 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=schemas.Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
-    if not user or not auth.verify_password(form_data.password, user.password):
+    email = form_data.username.strip()
+    password = form_data.password
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    
+    try:
+        email = str(email_adapter.validate_python(email)).lower()
+    except ValidationError:
+        raise HTTPException(
+            status_code=422,
+            detail="Please enter a valid email address",
+        )
+
+    if not password or not password.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Password is required",
+        )
+    
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user or not auth.verify_password(password, user.password):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
     token = auth.create_access_token(data={
