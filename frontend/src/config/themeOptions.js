@@ -8,6 +8,7 @@
 // inline styles, or hand-written CSS -- reads a single source of truth.
 //
 // Differences from the Laravel original, and only these:
+//   - the black theme pairs charcoal surfaces with the login mint accent
 //   - no SweetAlert consumer here, so nothing reads the tokens for one
 //   - adm_roles.theme_color is the only source of a preference; there is no
 //     per-user theme table yet, so normalizeThemePreference() sees role values
@@ -97,13 +98,15 @@ export const isDashboardPaletteTheme = (themeClassOrId) =>
 // reads from the same set of CSS custom properties.
 export const applyThemeColor = (themeColor) => {
     if (typeof document === 'undefined') return;
-    const hex = getThemeHex(themeColor) || getThemeHex(resolveThemeColor(themeColor));
+    const isDark = resolveThemeColor(themeColor?.replace(/^bg-/, '')) === 'skin-black';
+    // Keep the black skin identity while giving its controls the login accent.
+    const hex = isDark ? '#3ECF8E' : getThemeHex(themeColor) || getThemeHex(resolveThemeColor(themeColor));
     if (!hex) return;
     const red = parseInt(hex.slice(1, 3), 16);
     const green = parseInt(hex.slice(3, 5), 16);
     const blue = parseInt(hex.slice(5, 7), 16);
-    const foreground = ((red * 299 + green * 587 + blue * 114) / 1000) >= 155 ? '#111827' : '#FFFFFF';
-    const readable = ((red * 299 + green * 587 + blue * 114) / 1000) >= 145
+    const foreground = isDark ? '#0B0D10' : ((red * 299 + green * 587 + blue * 114) / 1000) >= 155 ? '#111827' : '#FFFFFF';
+    const readable = isDark ? hex : ((red * 299 + green * 587 + blue * 114) / 1000) >= 145
         ? `rgb(${Math.round(red * 0.62)}, ${Math.round(green * 0.62)}, ${Math.round(blue * 0.62)})`
         : hex;
     const light = `rgb(${Math.round(red + (255 - red) * 0.5)}, ${Math.round(green + (255 - green) * 0.5)}, ${Math.round(blue + (255 - blue) * 0.5)})`;
@@ -118,12 +121,11 @@ export const applyThemeColor = (themeColor) => {
 
     // Runtime colors consumed by Tailwind's theme utilities. Keep surfaces and
     // accent tokens together so switching roles also resets light/dark colors.
-    const isDark = resolveThemeColor(themeColor?.replace(/^bg-/, '')) === 'skin-black';
     const surfaces = isDark
-        ? { '--bg': '#07080a', '--panel': '#101318', '--panel-border': '#1f242d', '--text': '#f1f0ec', '--text-dim': '#9aa0ad', '--danger': '#e2665a', '--danger-soft': 'rgba(226, 102, 90, 0.14)' }
+        ? { '--bg': '#0f1115', '--panel': '#171a21', '--panel-border': '#262b35', '--text': '#e7e6e1', '--text-dim': '#8a8f9c', '--danger': '#e2665a', '--danger-soft': 'rgba(226, 102, 90, 0.14)' }
         : { '--bg': '#f3f4f6', '--panel': '#ffffff', '--panel-border': '#d1d5db', '--text': '#111827', '--text-dim': '#6b7280', '--danger': '#b42318', '--danger-soft': 'rgba(180, 35, 24, 0.12)' };
-    const accent = isDark ? 'var(--app-theme-light)' : 'var(--app-theme-readable)';
-    for (const [name, value] of Object.entries({ ...surfaces, '--accent': accent, '--accent-dim': accent, '--accent-soft': 'var(--app-theme-soft-strong)' })) {
+    const accent = isDark ? 'var(--app-theme-color)' : 'var(--app-theme-readable)';
+    for (const [name, value] of Object.entries({ ...surfaces, '--accent': accent, '--accent-dim': isDark ? '#2a8f63' : accent, '--accent-soft': 'var(--app-theme-soft-strong)' })) {
         document.documentElement.style.setProperty(name, value);
     }
 };

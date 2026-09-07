@@ -76,3 +76,17 @@
   --danger-soft: rgba(226, 102, 90, 0.14);
   color: var(--text);
 }
+
+/* Legacy profile surfaces follow the same charcoal palette in black mode. */
+html[data-app-theme="skin-black"] {
+  --color-skin-black: #171a21;
+  --color-black-table-color: #171a21;
+  --das-surface-solid: var(--panel);
+  --das-surface-muted: var(--bg);
+  --das-border: var(--panel-border);
+  --das-border-strong: var(--app-theme-border);
+  --das-text: var(--text);
+  --das-text-muted: var(--text-dim);
+  --das-text-soft: var(--text-dim);
+  --das-hover: var(--accent-soft);
+}

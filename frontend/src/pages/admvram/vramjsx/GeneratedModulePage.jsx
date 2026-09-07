@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../../api";
-import { useOptionalToast } from "../../../context/ToastContext";
+import { useOptionalToast, showToast, formatToastMessage } from "../../../context/ToastContext";
 import TableContainer from "../../../components/table/TableContainer";
 import Table from "../../../components/table/Table";
 import TableHead from "../../../components/table/TableHead";
@@ -13,7 +13,6 @@ import RowActions from "../../../components/table/RowActions";
 import RowAction from "../../../components/table/RowAction";
 import TopPanel from "../../../components/panel/TopPanel";
 import ContentPanel from "../../../components/panel/ContentPanel";
-import Toast from "../../../components/panel/Toast";
 import PrimaryButton from "../../../components/button/PrimaryButton";
 import SecondaryButton from "../../../components/button/SecondaryButton";
 import InputLabel from "../../../components/form/InputLabel";
@@ -195,7 +194,6 @@ export default function GeneratedModulePage({
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState({ by: null, dir: "asc" });
-  const [toast, setToast] = useState(null);
   const [panel, setPanel] = useState(null);      // { mode, row, values, errors, busy }
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -206,24 +204,14 @@ export default function GeneratedModulePage({
   const accessMask = booleanMap(moduleAccess, { view: true, create: true, update: true, delete: true });
   const actionMask = booleanMap(actions, { view: true, create: true, edit: true, delete: true });
 
-  // Three tiers, most specific first: an explicit onToast prop, the app-wide
-  // ToastProvider that AppContent mounts, then local state so the component
-  // still works standalone (a wrapper page rendered outside the shell).
-  // useOptionalToast rather than useToast: the shared provider is mounted by
-  // AppContent, but a wrapper page rendered outside the shell has none, and
-  // useToast() throws in that case by design.
+  // Allow callers to override the app-wide notification handler.
   const shared = useOptionalToast();
   const handleToast = useCallback((message, status = "success") => {
     if (onToast) return onToast(message, status);
     if (shared) return shared.handleToast(message, status);
-    setToast({ message, status });
+    return showToast(message, status);
   }, [onToast, shared]);
 
-  useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => setToast(null), 4000);
-    return () => clearTimeout(timer);
-  }, [toast]);
 
   const load = useCallback(() => {
     if (!path) {
@@ -253,15 +241,17 @@ export default function GeneratedModulePage({
         setData(res.data);
         setError("");
       })
-      .catch((err) =>
-        setError(
+      .catch((err) => {
+        const message = formatToastMessage(
           err.response?.status === 404
             ? "That module does not exist."
             : err.response?.data?.detail || "Could not load this module."
-        )
-      )
+        );
+        setError(message);
+        handleToast(message, "error");
+      })
       .finally(() => setLoading(false));
-  }, [path, search, page, sort, routeAction, recordId]);
+  }, [path, search, page, sort, routeAction, recordId, handleToast]);
 
   useEffect(() => {
     load();
@@ -606,9 +596,6 @@ export default function GeneratedModulePage({
 
   return (
     <ContentPanel className="">
-      {!onToast && !shared && (
-        <Toast message={toast?.message} status={toast?.status} onDismiss={() => setToast(null)} />
-      )}
 
       <TopPanel title={title ?? data.module.name}>
         <TextInput

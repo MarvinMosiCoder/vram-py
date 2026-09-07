@@ -5,6 +5,8 @@ import InputLabel from "../../components/form/InputLabel";
 import TextInput from "../../components/form/TextInput";
 import PrimaryButton from "../../components/button/PrimaryButton";
 
+import { formatToastMessage } from "../../context/ToastContext";
+import { toast as notify } from "react-toastify";
 const APP_NAME = "Vram Admin";
 
 function validateLogin(email, password) {
@@ -17,20 +19,40 @@ function validateLogin(email, password) {
 }
 
 function getApiErrorMessage(error) {
-  const detail = error.response?.data?.detail;
+  const data = error.response?.data;
+  return formatToastMessage(data?.detail || data?.errors || data?.message)
+    || "Login failed. Please try again.";
+}
 
-  if (typeof detail === "string") {
-    return detail;
-  }
-
-  if (Array.isArray(detail)) {
-    return detail
-      .map((item) => item.msg)
-      .filter(Boolean)
-      .join(", ");
-  }
-
-  return "Login failed. Please try again.";
+// The global container is outside .login-theme, so pin this toast's palette.
+function notifyLogin(message, type) {
+  const accent = type === "error" ? "#e2665a" : "#3ecf8e";
+  return notify(message, {
+    type,
+    theme: "dark",
+    closeButton: false,
+    autoClose: 3000,
+    hideProgressBar: false,
+    style: {
+      "--toastify-icon-color-success": "#3ecf8e",
+      "--toastify-icon-color-error": "#e2665a",
+      background: "#171a21",
+      color: "#e7e6e1",
+      border: "1px solid #262b35",
+      borderLeft: `3px solid ${accent}`,
+      fontFamily: '"Poppins", system-ui, sans-serif',
+      fontSize: "12px",
+      minHeight: "36px",
+      padding: "10px 15px",
+      borderRadius: "6px",
+      whiteSpace: "pre-line",
+      boxShadow: "0 8px 24px rgba(0, 0, 0, 0.3)",
+    },
+    progressStyle: {
+      background: accent,
+      height: "3px",
+    },
+  });
 }
 
 const LoginLoaderOverlay = () => (
@@ -60,7 +82,6 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const { login } = useAuth();
@@ -71,33 +92,23 @@ export default function LoginPage() {
     return () => clearInterval(interval);
   }, []);
 
-    useEffect(() => {
-        const interval = setInterval(() => setCurrentTime(new Date()), 1000);
-        return () => clearInterval(interval);
-    }, []);
-
-    useEffect(() => {
-        if (error.length > 0) {
-            const timer = setTimeout(() => setError(''), 5000);
-            return () => clearTimeout(timer);
-        }
-    }, [error]);
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (loading) return;
     const validationError = validateLogin(email, password);
     if (validationError) {
-      setError(validationError);
+      notifyLogin(validationError, "error");
       return;
     }
 
-    setError('');
     setLoading(true);
     try {
       await login(email.trim(), password);
+      notifyLogin("Signed in successfully.", "success");
       navigate("/dashboard");
     } catch (err) {
-      setError(getApiErrorMessage(err));
+      notifyLogin(getApiErrorMessage(err), "error");
     } finally {
       setLoading(false);
     }
@@ -193,11 +204,6 @@ export default function LoginPage() {
                   </div>
                 </label>
 
-                {error && (
-                    <span className="mt-2 block text-sm text-red-600">
-                        <i className="fa fa-warning mr-1" /> {error}
-                    </span>
-                )}
 
                 <PrimaryButton className="mt-5.5! w-full! p-2.75! text-sm! enabled:hover:bg-skin-accent-dim enabled:hover:text-skin-text enabled:hover:brightness-100" disabled={loading}>
                   {loading ? "Logging in, please wait..." : "Login"}

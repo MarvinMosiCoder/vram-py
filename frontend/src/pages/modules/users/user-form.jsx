@@ -7,7 +7,7 @@ import InputLabel from "../../../components/form/InputLabel";
 import TextInput from "../../../components/form/TextInput";
 import SelectInput from "../../../components/form/SelectInput";
 import InputError from "../../../components/form/InputError";
-
+import { toast as notify } from "react-toastify";
 const BLANK_USER = { name: "", email: "", id_adm_role: "", password: "" };
 
 // Shared by add.jsx and edit.jsx, same split as roles/role-form.jsx -- NOT a
@@ -52,7 +52,7 @@ export function UserForm({ action, args = [] }) {
       cancelled = true;
     };
   }, [isEdit, id]);
-  console.log("roleOptions", roleOptions, values);
+
   const set = (field) => (next) => setValues((prev) => ({ ...prev, [field]: next }));
 
   const validate = () => {
@@ -87,7 +87,25 @@ export function UserForm({ action, args = [] }) {
         ? await api.post("/users/update", { ...payload, id })
         : await api.post("/users/store", payload);
 
-      toast?.handleToast(res.data?.message || "Saved.", res.data?.status || "success");
+      notify(res.data?.message || "Saved successfully.", {
+        theme: "dark",
+        icon: false,
+        closeButton: false,
+        autoClose: 3000,
+        hideProgressBar: false,
+        style: {
+          background: "#1e293b",
+          color: "#9ca3af",
+          fontSize: "12px",
+          minHeight: "32px",
+          padding: "10px 15px",
+          borderRadius: "6px",
+        },
+        progressStyle: {
+          background: "linear-gradient(90deg, #38bdf8, #a855f7, #ef4444)",
+          height: "3px",
+        },
+      });
       navigate("/users");
     } catch (err) {
       const detail = err.response?.data?.detail;

@@ -1,3 +1,4 @@
+import { useToast } from "../../context/ToastContext";
 import React, { useEffect, useState } from "react";
 import { Link, router, useForm } from "@inertiajs/react";
 import { ArrowLeft, Loader2, Mail, Send, ShieldCheck } from "lucide-react";
@@ -6,6 +7,7 @@ import getAppLogo from "../../Components/SystemSettings/ApplicationLogo";
 import LoginDetails from "../../Components/SystemSettings/LoginDetails";
 
 const ResetPassword = () => {
+    const { handleToast } = useToast();
     const [appname, setAppname] = useState("");
     const [loginBgColor, setLoginBgColor] = useState("");
     const [lfc, setLfc] = useState("");
@@ -31,24 +33,10 @@ const ResetPassword = () => {
         post("/send_resetpass_email", {
             onSuccess: () => {
                 reset();
-                const Toast = Swal.mixin({
-                    toast: true,
-                    position: "top-end",
-                    showConfirmButton: false,
-                    timer: 3000,
-                    timerProgressBar: true,
-                    didOpen: (toast) => {
-                        toast.onmouseenter = Swal.stopTimer;
-                        toast.onmouseleave = Swal.resumeTimer;
-                    },
-                });
-                Toast.fire({
-                    icon: "success",
-                    title: "Email sent, please check your inbox",
-                }).then(() => {
-                    router.visit("/login");
-                });
+                handleToast("Email sent, please check your inbox", "success");
+                router.visit("/login");
             },
+            onError: (errors) => handleToast(errors, "error"),
         });
     };
 

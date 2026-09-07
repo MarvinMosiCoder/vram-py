@@ -493,7 +493,18 @@ const useThemeStyles = (theme) => {
         bulkActionTextColor: 'text-skin-text',
         bulkActionCancelButtonColor: 'bg-skin-panel',
     };
-    const value = (key) => sharedTokens[key] ?? styles[key][theme] ?? themeFallbacks[key];
+    const blackAccentTokens = theme === 'bg-skin-black' ? {
+        primayActiveColor: 'bg-skin-custom',
+        paginationSideActiveColor: 'bg-skin-custom',
+        paginationHoverColor: 'hover:bg-skin-accent-soft',
+        sidebarHoverTextColor: 'hover:text-skin-accent',
+        sidebarHoverMenuBgColor: 'hover:bg-skin-accent-soft',
+        sidebarHoverMenuBorderColor: 'hover:border-skin-accent-dim',
+        sidebarActiveTextColor: 'text-theme-contrast',
+        sidebarActiveMenuBgColor: 'bg-skin-custom',
+        sidebarActiveMenuBorderColor: 'border-skin-accent',
+    } : {};
+    const value = (key) => blackAccentTokens[key] ?? sharedTokens[key] ?? styles[key][theme] ?? themeFallbacks[key];
 
     return {
         textColor:                    value('textColor'),

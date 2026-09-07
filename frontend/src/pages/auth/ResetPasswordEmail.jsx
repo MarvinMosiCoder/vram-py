@@ -1,3 +1,4 @@
+import { useToast } from "../../context/ToastContext";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, router } from "@inertiajs/react";
 import axios from "axios";
@@ -16,6 +17,7 @@ const Requirement = ({ active, children }) => (
 );
 
 const ResetPasswordEmail = ({ email }) => {
+    const { handleToast } = useToast();
     const [loading, setLoading] = useState(false);
     const [passwordMismatch, setPasswordMismatch] = useState(false);
     const [forms, setForms] = useState({
@@ -90,47 +92,14 @@ const ResetPasswordEmail = ({ email }) => {
 
         try {
             const response = await axios.post("/send_resetpass_email/reset", forms);
-            const Toast = Swal.mixin({
-                toast: true,
-                position: "top-end",
-                showConfirmButton: false,
-                timer: 3000,
-                timerProgressBar: true,
-                didOpen: (toast) => {
-                    toast.onmouseenter = Swal.stopTimer;
-                    toast.onmouseleave = Swal.resumeTimer;
-                },
-            });
-
-            if (response.data.status == "success") {
-                Toast.fire({
-                    icon: "success",
-                    title: "Password reset successful",
-                }).then(() => {
-                    router.visit("/login");
-                });
+            if (response.data.status === "success") {
+                handleToast("Password reset successful", "success");
+                router.visit("/login");
             } else {
-                Toast.fire({
-                    icon: "error",
-                    title: response.data.message || "Request expired, please request another one",
-                });
+                handleToast(response.data.message || "Request expired, please request another one", "error");
             }
         } catch (error) {
-            const Toast = Swal.mixin({
-                toast: true,
-                position: "top-end",
-                showConfirmButton: false,
-                timer: 3000,
-                timerProgressBar: true,
-                didOpen: (toast) => {
-                    toast.onmouseenter = Swal.stopTimer;
-                    toast.onmouseleave = Swal.resumeTimer;
-                },
-            });
-            Toast.fire({
-                icon: "error",
-                title: "An error occurred. Please try again.",
-            });
+            handleToast(error.response?.data?.message || error.response?.data?.detail || "An error occurred. Please try again.", "error");
         } finally {
             setLoading(false);
         }

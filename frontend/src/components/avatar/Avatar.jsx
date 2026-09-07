@@ -1,3 +1,4 @@
+import { useState } from "react";
 import colorMap from "./colorMap";
 
 const getInitials = (value) => {
@@ -7,21 +8,29 @@ const getInitials = (value) => {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 };
 
-// Stands in for the Laravel project's Components/Avatar/AvatarImage.jsx.
-// That version can render an uploaded profile photo; this backend has no
-// avatar-upload column or file storage at all, so this is initials-only --
-// the color-by-letter part of the original is what's worth keeping.
-const Avatar = ({ name, size = "md" }) => {
+// Profile images use the Python backend's stored filename; initials are the fallback.
+const Avatar = ({ name, size = "md", fileName }) => {
+  const [failedSource, setFailedSource] = useState(null);
+  const source = fileName ? `/images/profile/${encodeURIComponent(fileName)}` : null;
   const initials = getInitials(name);
   const bgClass = colorMap[initials.charAt(0)] || "bg-slate-300";
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center rounded-full border border-skin-border font-semibold text-gray-800 ${
+      className={`flex overflow-hidden shrink-0 items-center justify-center rounded-full border border-skin-border font-semibold text-gray-800 ${
         size === "lg" ? "h-12 w-12 text-base" : "h-9 w-9 text-[13px]"
       } ${bgClass}`}
     >
-      <span>{initials}</span>
+      {source && failedSource !== source ? (
+        <img
+          src={source}
+          alt={`${name || "User"} profile`}
+          className="h-full w-full object-cover"
+          onError={() => setFailedSource(source)}
+        />
+      ) : (
+        <span>{initials}</span>
+      )}
     </div>
   );
 };

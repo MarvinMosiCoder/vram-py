@@ -32,10 +32,7 @@ export default function AppSidebar() {
           isSidebarOpen ? "translate-x-0 md:w-70" : "-translate-x-full md:w-0"
         }`}
       >
-        <div className="overscroll-y-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex h-full w-70 flex-col overflow-y-auto px-3 pb-8 pt-5">
-          <div className="mb-5 px-2.5 font-mono text-[13px] uppercase tracking-[0.08em] text-skin-accent">
-            Vram Admin
-          </div>
+        <div className="overscroll-y-contain scrollbar-none [&::-webkit-scrollbar]:hidden flex h-full w-70 flex-col overflow-y-auto px-3 pb-8 pt-5">
           <UserSidebar />
           {user?.is_superadmin && <AdminSidebar />}
         </div>

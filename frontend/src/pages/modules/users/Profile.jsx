@@ -5,7 +5,7 @@ import { useProfile, useTheme } from "../../../context/ThemeContext";
 import useThemeStyles from "../../../hooks/useThemeStyles";
 import colorMap from "../../../components/avatar/colorMap";
 import api from "../../../api";
-import { useToast } from "../../../context/ToastContext";
+import { formatToastMessage, useToast } from "../../../context/ToastContext";
 import Modal from "../../../components/modal/Modal";
 import {
     Camera,
@@ -41,11 +41,22 @@ const avatarOptions = [
     { id: "panda", ext: "svg" },
 ].map((avatar) => ({ ...avatar, src: `/images/profile-avatars/${avatar.id}.${avatar.ext}` }));
 
+async function profileErrorMessage(error, fallback) {
+    let data = error.response?.data;
+    if (data instanceof Blob) {
+        try {
+            data = JSON.parse(await data.text());
+        } catch {
+            return fallback;
+        }
+    }
+    return formatToastMessage(data?.detail || data?.errors || data?.message) || fallback;
+}
+
 const Profile = ({ page_title, user }) => {
     const { theme } = useTheme();
     const { profile, setProfile } = useProfile();
     const { setTitle } = useContext(NavbarContext);
-    const swalColor = "var(--app-theme-color)";
     const [loading, setLoading] = useState(false);
     const { textColor, textColorActive, scrollbarTheme, primayActiveColor, borderTheme } = useThemeStyles(theme);
     const [profileImage, setProfileImage] = useState();
@@ -88,8 +99,8 @@ const Profile = ({ page_title, user }) => {
     const fetchProfiles = () => {
         api.get("/profiles")
         .then((response) => setProfiles(response.data))
-        .catch(() => {
-            handleToast("Unable to load profiles.", "error");
+        .catch(async (error) => {
+            handleToast(await profileErrorMessage(error, "Unable to load profiles."), "error");
         });
     };
 
@@ -115,7 +126,7 @@ const Profile = ({ page_title, user }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!profileImage) return;
+        if (loading || !profileImage) return;
 
         setLoading(true);
         try {
@@ -125,54 +136,48 @@ const Profile = ({ page_title, user }) => {
                 },
             });
 
-            handleToast(response.data.message, response.data.status);
+            handleToast(response.data.message || "Profile updated.", response.data.status || "success");
             if (response.data.status === "success") {
                 setProfile(response.data.file_name);
                 setProfileImage(null);
                 setShowProfileChooser(false);
                 fetchProfiles();
-                window.location.reload();
             }
         } catch (error) {
-            if (error.response && error.response.status === 422) {
-                handleToast(error.response.data.errors, "error");
-            } else {
-                handleToast("An error occurred. Please try again.", "error");
-            }
+            handleToast(await profileErrorMessage(error, "Unable to upload the profile image."), "error");
         } finally {
             setLoading(false);
         }
     };
 
     const handleAvatarSubmit = async () => {
-        if (!selectedAvatar) return;
+        if (loading || !selectedAvatar) return;
         setLoading(true);
         try {
             const response = await api.post("/save-profile-avatar", { avatar: selectedAvatar });
-            handleToast(response.data.message, response.data.status);
+            handleToast(response.data.message || "Profile updated.", response.data.status || "success");
             if (response.data.status === "success") {
                 setProfile(response.data.file_name);
                 setSelectedAvatar(null);
                 setShowProfileChooser(false);
                 fetchProfiles();
-                window.location.reload();
             }
         } catch (error) {
-            handleToast(error.response?.data?.message || "Unable to update the avatar.", "error");
+            handleToast(await profileErrorMessage(error, "Unable to update the avatar."), "error");
         } finally {
             setLoading(false);
         }
     };
 
-    const handleUpdateProfile = (e, id, fileName) => {
+    const handleUpdateProfile = (e, id) => {
         e.preventDefault();
         setProfileUpdate(id);
-        setProfile(fileName);
     };
 
     const handleProfileUpdate = async (e, id, action) => {
         e.preventDefault();
         e.stopPropagation();
+        if (loading) return;
         setLoading(true);
 
         try {
@@ -193,47 +198,45 @@ const Profile = ({ page_title, user }) => {
             );
 
             if (action === "download") {
+                // The endpoint can return JSON warnings even with HTTP 200.
+                const contentType = response.headers["content-type"] || response.data.type || "";
+                if (contentType.includes("json")) {
+                    const data = JSON.parse(await response.data.text());
+                    handleToast(data.message || data.detail || "Unable to download the profile image.", data.status || "error");
+                    return;
+                }
                 const url = window.URL.createObjectURL(new Blob([response.data]));
                 const link = document.createElement("a");
                 link.href = url;
 
                 const contentDisposition = response.headers["content-disposition"];
-                const fileName = contentDisposition
-                    ? contentDisposition.split("filename=")[1].replace(/"/g, "")
-                    : "profile_image";
+                const fileName = contentDisposition?.match(/filename="?([^";]+)"?/i)?.[1] || "profile_image";
 
                 link.setAttribute("download", fileName);
                 document.body.appendChild(link);
                 link.click();
-                link.parentNode.removeChild(link);
-            } else if (response.data.status === "success") {
-                Swal.fire({
-                    type: response.data.status,
-                    title: response.data.message,
-                    icon: response.data.status,
-                    confirmButtonColor: swalColor,
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        setShowModalProfiles(false);
-                        fetchProfiles();
-                        window.location.reload();
-                    }
-                });
+                link.remove();
+                setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+                handleToast("Profile image download started.", "success");
             } else {
-                Swal.fire({
-                    type: response.data.status,
-                    title: response.data.message,
-                    icon: response.data.status,
-                    confirmButtonColor: swalColor,
-                });
+                handleToast(response.data.message || "Profile updated.", response.data.status || "success");
+                if (response.data.status === "success") {
+                    if (response.data.file_name) {
+                        setProfile(response.data.file_name);
+                    }
+                    if (action === "delete" && profiles.find((item) => item.id === (id ?? profileUpdate))?.file_name === activeProfile) {
+                        setProfile("");
+                    }
+                    setProfileUpdate(null);
+                    setShowModalProfiles(false);
+                    fetchProfiles();
+                }
             }
         } catch (error) {
-            Swal.fire({
-                type: "error",
-                title: "An error occurred while updating profile",
-                icon: "error",
-                confirmButtonColor: swalColor,
-            });
+            handleToast(
+                await profileErrorMessage(error, "Unable to " + action + " the profile image."),
+                "error"
+            );
         } finally {
             setLoading(false);
         }

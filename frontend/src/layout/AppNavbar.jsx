@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useProfile } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { useSidebar } from "../context/SidebarContext";
 import Avatar from "../components/avatar/Avatar";
@@ -11,6 +12,8 @@ import ApplicationName from "../components/system/ApplicationName";
 
 const AppNavbar = () => {
   const { user, logout } = useAuth();
+  const { profile } = useProfile();
+  const activeProfile = typeof profile === "string" ? profile : user?.profile;
   const { isSidebarOpen, toggleSidebar } = useSidebar();
   const [showMenu, setShowMenu] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -118,7 +121,7 @@ const AppNavbar = () => {
               aria-haspopup="true"
               aria-expanded={showMenu}
             >
-              <Avatar name={displayName} />
+              <Avatar name={displayName} fileName={activeProfile} />
               <span className="hidden max-w-35 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-medium md:inline-block">
                 {displayName}
               </span>
@@ -134,7 +137,7 @@ const AppNavbar = () => {
                 role="menu"
               >
                 <div className="mb-1 flex items-center gap-2.5 border-b border-skin-border px-4 pb-3">
-                  <Avatar name={displayName} size="lg" />
+                  <Avatar name={displayName} fileName={activeProfile} size="lg" />
                   <div className="flex min-w-0 flex-col gap-1">
                     <p className="m-0 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-semibold">
                       {displayName || "-"}
@@ -150,7 +153,6 @@ const AppNavbar = () => {
                   </div>
                 </div>
                 <Link
-                    href="/profile"
                     to="/profile"
                     className="flex min-h-10.5 items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-(--das-text) transition hover:bg-(--das-hover)"
                     onClick={() => {
