@@ -8,6 +8,7 @@ import Layout from "./layout/Layout";
 import Login from "./pages/auth/Login";
 import Dashboard from "./pages/Dashboard";
 import ModuleRoute from "./pages/ModuleRoute";
+import Profile from "./pages/modules/users/Profile";
 
 function Themed({ children }) {
   const { user } = useAuth();
@@ -20,6 +21,12 @@ function Themed({ children }) {
       {children}
     </ThemeProvider>
   );
+}
+
+function ProfileRoute() {
+  const { user } = useAuth();
+
+  return <Profile page_title="Profile" user={user} />;
 }
 
 export default function App() {
@@ -43,6 +50,7 @@ export default function App() {
             >
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/:modulePath/*" element={<ModuleRoute />} />
+              <Route path="/profile" element={<ProfileRoute />} />
             </Route>
 
             <Route

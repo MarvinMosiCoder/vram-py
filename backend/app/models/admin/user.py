@@ -24,3 +24,4 @@ class User(Base):
     updated_by = Column(Integer, nullable=True)
     updated_at = Column(DateTime, nullable=True)
     role = relationship("Role", back_populates="users")
+    profile = relationship("AdmUserProfiles", back_populates="user")

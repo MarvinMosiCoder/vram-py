@@ -19,6 +19,7 @@ class UserOut(BaseModel):
     role: str | None = None
     role_id: int | None = None
     is_superadmin: bool = False
+    profile: str | None = None
 
     class Config:
         from_attributes = True  # lets this read directly from a SQLAlchemy object

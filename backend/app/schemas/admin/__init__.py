@@ -7,6 +7,7 @@ from app.schemas.admin.token import Token
 from app.schemas.admin.user import UserCreate, UserLogin, UserOut
 from app.schemas.admin.adm_roles_privileges import AdminRolesPrivileges
 from app.schemas.admin.adm_settings import AdmSettingsOut
+from app.schemas.admin.adm_user_profiles import AdmUserProfilesOut
 
 __all__ = [
     "UserCreate",
@@ -17,4 +18,5 @@ __all__ = [
     "MenuOut",
     "AdminRolesPrivileges",
     "AdmSettingsOut",
+    "AdmUserProfilesOut",
 ]

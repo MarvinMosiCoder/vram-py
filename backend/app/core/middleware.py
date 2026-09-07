@@ -8,7 +8,15 @@ from app.core.database import SessionLocal
 # Paths that don't need a logged-in user. Everything else is blocked
 # by default — a route added to routers.py without Depends(get_current_user)
 # is still protected here instead of silently becoming public.
-PUBLIC_PATHS = {"/login", "/register", "/docs", "/redoc", "/openapi.json"}
+PUBLIC_PATHS = {
+    "/login",
+    "/register",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/system/logo",
+    "/system/appname",
+}
 
 
 class RequireAuthMiddleware(BaseHTTPMiddleware):

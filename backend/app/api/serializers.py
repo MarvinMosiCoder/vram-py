@@ -5,6 +5,15 @@ from app import models, schemas
 
 
 def user_out(user: models.User) -> schemas.UserOut:
+    active_profile = next(
+        (
+            profile.file_name
+            for profile in sorted(user.profile, key=lambda item: item.id, reverse=True)
+            if profile.archived is None and profile.file_name
+        ),
+        None,
+    )
+
     return schemas.UserOut(
         id=user.id,
         email=user.email,
@@ -13,4 +22,5 @@ def user_out(user: models.User) -> schemas.UserOut:
         role=user.role.name if user.role else None,
         role_id=user.id_adm_role,
         is_superadmin=bool(user.role.is_superadmin) if user.role else False,
+        profile=active_profile,
     )

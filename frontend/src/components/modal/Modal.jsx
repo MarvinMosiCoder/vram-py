@@ -17,11 +17,11 @@ const Modal = ({ show, onClose, title, icon, children }) => {
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-200 flex items-center justify-center bg-black/50 p-4"
       onMouseDown={onClose}
     >
       <div
-        className="flex w-full max-w-[420px] flex-col gap-3.5 rounded-[10px] border border-skin-border bg-skin-panel p-5"
+        className="flex w-full max-w-105 flex-col gap-3.5 rounded-[10px] border border-skin-border bg-skin-panel p-5"
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -32,7 +32,7 @@ const Modal = ({ show, onClose, title, icon, children }) => {
           <h3 className="m-0 flex-1 text-[15px]">{title}</h3>
           <button
             type="button"
-            className="!mt-0 !h-auto !w-auto border-0 !bg-transparent px-1 text-lg leading-none !text-skin-dim hover:!bg-transparent hover:!text-skin-text"
+            className="mt-0! h-auto! w-auto! border-0 bg-transparent! px-1 text-lg leading-none text-skin-dim! hover:bg-transparent! hover:text-skin-text!"
             onClick={onClose}
             aria-label="Close"
           >

@@ -16,8 +16,10 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 # access to the values within the .ini file in use.
 config = context.config
 
-from app.core.database import Base, DATABASE_URL
-config.set_main_option("sqlalchemy.url", DATABASE_URL)
+from app.core.config import settings
+from app.core.database import Base
+
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 from app import models  # noqa: F401 -- must be imported so Base.metadata knows about User
 
 
