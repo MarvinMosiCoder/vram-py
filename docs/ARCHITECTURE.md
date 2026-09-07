@@ -95,8 +95,7 @@ backend/
 frontend/
   vite.config.js           React plugin + the Tailwind v4 plugin
   src/
-    index.css              the whole stylesheet: Tailwind import, @theme
-                            tokens, role palettes, then semantic classes
+    index.css              Tailwind import, theme tokens, and dynamic class sources
     api.js                 shared axios instance + auth-header interceptor
     context/AuthContext.jsx  global auth state (user, login, logout)
     context/NavbarContext.jsx  scaffolding — a title state whose effect is
@@ -537,51 +536,30 @@ with each other.
 
 ## Styling and theming
 
-Two systems, deliberately coexisting: **hand-written semantic CSS** (the
-original, and still what every component uses) and **Tailwind v4** (added
-2026-08-31, for new work). Everything lives in one file,
-`frontend/src/index.css`, in this order:
+All component styling uses **Tailwind v4 utilities in JSX**. There are no
+custom component selectors or global button/input rules in `index.css`.
+The entry stylesheet contains only the Tailwind import, an explicit source
+list for dynamically constructed theme background classes, and `@theme`
+configuration. The Vite plugin compiles the utilities.
 
-```
-@import "tailwindcss";      Tailwind's preflight + utilities
-@theme static { ... }       Tailwind tokens, each pointing at a --var below
-:root { ... }               the project's own palette
-:root[data-app-theme="…"]   one block per role theme
-:root.app-theme-dark        the one skin that also swaps page surfaces
-.sidebar-link, .card, …     the semantic classes components actually use
-```
+`@theme static` defines the legacy/palette colors and fonts. `@theme inline`
+connects utilities such as `bg-skin-panel`, `text-skin-text`, and
+`border-skin-border` to runtime CSS variables. `applyThemeColor()` in
+`config/themeOptions.js` supplies those variables, including light/dark
+surfaces and readable button foregrounds. `main.jsx` applies the default
+before mounting React; `ThemeProvider` applies the authenticated role.
 
-Tailwind v4 needs no `tailwind.config.js` and no `postcss.config.js` —
-`@tailwindcss/vite` in `vite.config.js` plus the `@theme` block above is
-the whole configuration.
+Shared components own their defaults: buttons define padding, border, and
+states; inputs define their surfaces and focus outlines; table cells define
+padding, alignment, and borders. React-select uses `unstyled` and its
+`classNames` API with Tailwind utilities. Runtime record badge colors remain
+data-driven, with their shape expressed as utilities in the renderer.
 
-**One palette, two consumers.** Every `@theme` token is defined as
-`var(--…)` pointing at the project's own property:
-
-```css
-@theme static { --color-skin-accent: var(--accent); }
-```
-
-So `bg-skin-accent` compiles to
-`background-color: var(--color-skin-accent)` → `var(--accent)`, which means
-a utility class picks up the signed-in user's role theme at runtime, the
-same way `.sidebar-link.active` does. `static` is required: without it
-Tailwind tree-shakes tokens no utility references, leaving
-`var(--color-skin-*)` undefined for hand-written rules.
-
-**The cascade gotcha, worth knowing before you reach for a utility.**
-Tailwind puts preflight and utilities inside `@layer base` / `@layer
-utilities`; the project's own CSS is *unlayered*, and unlayered rules beat
-every cascade layer regardless of order or specificity. Two consequences:
-
-| | |
-|---|---|
-| Good | Tailwind's preflight cannot disturb the existing look. The bare-element rules (`button`, `input`, `h1`, `label`) still win, so nothing had to change when Tailwind went in. |
-| Bad | A utility **loses** to an existing rule for the same property. `<button className="bg-skin-panel">` will not override `button { background: var(--accent) }`. Utilities are safe on elements the stylesheet doesn't already target, and on properties it doesn't already set. |
-
-The clean fix, when it matters, is to move those bare-element rules onto
-classes; until then, prefer utilities for layout and spacing on `div`s and
-new components, which is where nothing collides.
+Responsive behavior also lives in JSX: the navbar has two rows below `md`,
+the sidebar uses a mobile overlay, and its scrollbar is hidden with
+`[scrollbar-width:none] [&::-webkit-scrollbar]:hidden` while scrolling stays
+enabled. The authenticated shell fills `h-dvh`; sidebar and content regions
+scroll independently, with the footer beneath the content.
 
 ### The component family
 
@@ -607,11 +585,9 @@ So the table primitives still need renaming to `Thead` / `Tbody` / `Row` /
 `TableHeader`, and the panels moving under `table/`, to line up fully. The
 naming is the only difference; the composition already matches.
 
-Two components encode a hard-won detail. `RowData`'s `center` prop used to
-apply only Tailwind's `text-center`, which loses to the unlayered
-`.module-table td` rule — it now emits `is-center` as well. And `RowAction`
-maps a descriptor's icon name (`"pencil"`, `"trash"`) onto its own action
-keys, so a module's `actions` metadata can choose the glyph.
+`RowData` uses Tailwind alignment and theme surface utilities, including
+sticky cells. `RowAction` maps descriptor icon names such as `"pencil"` and
+`"trash"` to action keys.
 
 ### The app shell
 
@@ -679,41 +655,36 @@ the rest of the palette from one hex:
 | `--app-theme-light` | lightened 50% toward white |
 | `--app-theme-soft` / `-soft-strong` / `-border` / `-deep` | translucent variants at 10% / 18% / 34% / 28% |
 
-`index.css` aliases the project's own names onto those —
-`--accent: var(--app-theme-color)`, `--accent-dim:
-var(--app-theme-readable)`, `--accent-soft: var(--app-theme-soft-strong)` —
-so every existing rule keeps working and a theme change moves both sets at
-once. The literal fallbacks on `:root` are the original green, used before
-any theme has been applied.
+`applyThemeColor()` also sets surface, text, border, danger, and semantic
+accent tokens on `<html>`. Non-black themes use light surfaces; `skin-black`
+uses dark surfaces. Tailwind's inline theme references those tokens directly,
+so every shared component updates together. Navbar and sidebar backgrounds
+remain neutral while active items and primary actions use the accent.
 
-```mermaid
-flowchart LR
-    R[("adm_roles.theme_color")] --> M["GET /me → UserOut.theme_color"]
-    M --> A["AuthContext user"]
-    A --> T["Themed bridge in App.jsx"]
-    T --> P["ThemeProvider (ThemeContext.jsx)"]
-    P --> O["config/themeOptions.js"]
-    O -->|"applyThemeColor"| V["8 × --app-theme-* on html"]
-    O -->|"getThemeClass"| C["theme = 'bg-skin-blue'"]
-    C -->|"=== 'bg-skin-black'"| K["html.app-theme-dark<br/>swaps page surfaces"]
-    C --> D["RowData / AppContent / AppFooter<br/>dark-mode checks"]
-```
+### Theme integration checks
 
-Only `skin-black` swaps the page *surfaces* (via `.app-theme-dark`); every
-other skin is an accent change. That is why there is no longer a CSS block
-per skin — the hex table in `themeOptions.js` is the single source.
+The role's `theme_color` is returned by `/me` and passed through
+`App.jsx` to `ThemeProvider`. Named skins, dashboard palette IDs, and
+six-digit custom hex values are supported. An empty or invalid preference
+resolves to `skin-blue` before CSS variables are applied, including when
+logging out, so a previous role's colors do not persist. Previously saved
+`#skin-*` values are accepted for compatibility with the old role-create
+normalization bug; new role creation preserves named IDs.
 
-`ThemeProvider` needs a user, and the user only exists inside
-`AuthProvider`, so `App.jsx` has a small `Themed` bridge that reads
-`useAuth()` and passes `user?.theme_color` down. Before login that is
-`undefined`, which normalises to `"system"` and resolves to `skin-blue`.
+Non-black themes use light page and panel surfaces; `skin-black` uses dark
+surfaces. Shared cards, dropdowns, sticky table cells, sidebar links, and
+modals consume the same surface/text tokens. Primary buttons use the theme
+fill and computed foreground. The navbar stays neutral, including its two
+mobile rows and separator. `useThemeStyles` retains the Laravel interface
+but maps shared surfaces to these tokens. The legacy and palette colors
+are declared in Tailwind's `@theme`, with dynamic background class names
+explicitly included using `@source inline`.
 
-Two caveats. Only one role exists today and its `theme_color` is null, so
-the machinery is unexercised — set the column to `skin-blue`,
-`skin-palette-teal` or `#134B70` to see all three paths. And
-`applyThemeColor` never *clears* the properties it sets: it returns early
-when a value has no hex, so a previous theme's tokens persist. That matches
-the original, and matters only if a theme is ever unset at runtime.
+Saving the signed-in user's own role refreshes `/me` so the theme updates
+without another login. Changes made in another session are picked up on
+reload. For verification, check white, black, a palette color, a custom hex,
+and a cleared preference; dropdown menus and sticky cells should match
+their parent panel, and buttons should update their foreground and fill.
 
 ## Configuration notes
 

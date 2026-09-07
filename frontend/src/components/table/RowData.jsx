@@ -1,22 +1,19 @@
 import React from "react";
-import { useTheme } from "../../context/ThemeContext";
 
 const RowData = ({ children, sticky, center, isLoading }) => {
-    const { theme } = useTheme();
-    const isDark = theme === "bg-skin-black";
     const stickyClass = {
-        left: `sticky left-0 top-0 z-40 after:absolute after:top-0 after:right-0 after:z-40 after:h-full after:w-px ${isDark ? "after:bg-gray-800 bg-black-table-color text-gray-300" : "after:bg-gray-200 bg-white"}`,
-        right: `sticky right-0 top-0 z-40 before:absolute before:top-0 before:left-0 before:z-40 before:h-full before:w-px ${isDark ? "before:bg-gray-800 bg-black-table-color text-gray-300" : "before:bg-gray-200 bg-white"}`,
+        left: `sticky left-0 top-0 z-40 after:absolute after:top-0 after:right-0 after:z-40 after:h-full after:w-px after:bg-skin-border bg-skin-panel text-skin-text`,
+        right: `sticky right-0 top-0 z-40 before:absolute before:top-0 before:left-0 before:z-40 before:h-full before:w-px before:bg-skin-border bg-skin-panel text-skin-text`,
     }[sticky];
 
     return (
         <td
-            className={`px-4 py-3 ${isDark ? "text-gray-300" : "text-gray-700"} text-[12px] align-middle ${stickyClass || ""} ${
-                center && "is-center text-center"
+            className={`border-b border-skin-border px-3.5 py-2.5 text-skin-text text-[13px] align-middle ${stickyClass || ""} ${
+                center ? "text-center" : "text-left"
             }`}
         >
             {isLoading ? (
-                <span className={`animate-pulse inline-block w-3/4 rounded-md h-4 p-auto ${isDark ? "bg-gray-800" : "bg-gray-200"}`}>
+                <span className={`animate-pulse inline-block w-3/4 rounded-md h-4 bg-skin-border`}>
                     &nbsp;&nbsp;
                 </span>
             ) : (

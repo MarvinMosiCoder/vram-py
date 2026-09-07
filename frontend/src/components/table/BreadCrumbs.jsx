@@ -1,14 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
 
-// The breadcrumb trail above a page's content.
-//
-// The Laravel original took `data={auth}` and read the module list out of
-// Inertia's shared props. There are no shared props here, so the trail is
-// derived from the URL instead -- which works for every module without the
-// backend having to send anything extra.
-//
-// Pass `items` to override: [{ label, to }], last one rendered as current.
-
 const prettify = (segment) =>
     segment
         .replace(/[-_]/g, " ")
@@ -17,23 +8,17 @@ const prettify = (segment) =>
 const BreadCrumbs = ({ title, items, className = "" }) => {
     const { pathname } = useLocation();
 
-    const segments = pathname.split("/").filter(Boolean);
-    const derived = segments.map((segment, i) => ({
-        label: prettify(segment),
-        to: "/" + segments.slice(0, i + 1).join("/"),
-    }));
+    const [root] = pathname.split("/").filter(Boolean);
+    const derived = root ? [{ label: prettify(root), to: "/" + root }] : [];
 
-    // Dashboard is the implicit root -- it is the one page every signed-in user
-    // can always reach, and it has no row in any menu table.
     const trail = items ?? [{ label: "Dashboard", to: "/dashboard" }, ...derived];
-
-    // Drop a duplicate leading crumb when you are already on /dashboard.
+   
     const crumbs = trail.filter(
         (crumb, i) => !(i > 0 && crumb.to === trail[0].to)
     );
 
     return (
-        <nav className={`breadcrumbs ${className}`.trim()} aria-label="Breadcrumb">
+        <nav className={`text-xs text-skin-dim [&_ol]:m-0 [&_ol]:flex [&_ol]:list-none [&_ol]:flex-wrap [&_ol]:items-center [&_ol]:gap-1.5 [&_ol]:p-0 [&_li]:flex [&_li]:items-center [&_li]:gap-1.5 [&_a]:text-skin-dim [&_a]:no-underline [&_a:hover]:text-skin-accent [&_[aria-current=page]_span]:font-medium [&_[aria-current=page]_span]:text-skin-text ${className}`.trim()} aria-label="Breadcrumb">
             <ol>
                 {crumbs.map((crumb, i) => {
                     const isLast = i === crumbs.length - 1;
@@ -44,7 +29,7 @@ const BreadCrumbs = ({ title, items, className = "" }) => {
                             ) : (
                                 <Link to={crumb.to}>{crumb.label}</Link>
                             )}
-                            {!isLast && <span className="breadcrumbs-sep" aria-hidden="true">/</span>}
+                            {!isLast && <span className="text-skin-border" aria-hidden="true">/</span>}
                         </li>
                     );
                 })}

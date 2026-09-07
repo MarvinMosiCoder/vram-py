@@ -11,7 +11,7 @@ import ApplicationName from "../components/system/ApplicationName";
 
 const AppNavbar = () => {
   const { user, logout } = useAuth();
-  const { toggleSidebar } = useSidebar();
+  const { isSidebarOpen, toggleSidebar } = useSidebar();
   const [showMenu, setShowMenu] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [now, setNow] = useState(new Date());
@@ -56,26 +56,28 @@ const AppNavbar = () => {
 
   return (
     <>
-      <div className="flex shrink-0 items-center justify-between border-b border-skin-border bg-skin-panel px-4 md:px-7">
-        <div className="flex min-w-0 items-center gap-3.5">
+      <div className="min-h-20 pt-10 text-skin-text md:min-h-0 md:pt-0 relative flex shrink-0 items-center justify-between border-b border-skin-border bg-skin-panel px-4 md:px-7">
+        <div className={`flex min-w-0 items-center gap-3.5 ${isSidebarOpen ? "" : "md:pl-9"}`}>
           <button
             type="button"
-            className="mt-0! hidden h-9! w-9! items-center justify-center rounded-lg border border-skin-border bg-transparent! p-0! text-skin-dim transition hover:bg-skin-border! hover:text-skin-text max-[767px]:inline-flex"
+            className={`max-md:h-11! max-md:min-w-11 max-md:border-0 max-md:bg-transparent! max-md:text-skin-text! mt-0! inline-flex h-9! w-9! shrink-0 items-center justify-center rounded-lg border border-skin-border bg-skin-panel p-0! text-skin-dim transition-[left,background-color,color] duration-300 hover:bg-skin-border! hover:text-skin-text md:absolute md:top-1/2 md:z-10 md:-translate-x-1/2 md:-translate-y-1/2 ${isSidebarOpen ? "md:left-70" : "md:left-7"}`}
             onClick={() => toggleSidebar()}
-            aria-label="Toggle sidebar"
+            aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
+            aria-expanded={isSidebarOpen}
+            aria-controls="app-sidebar"
           >
             <i className="fa fa-bars" aria-hidden="true" />
           </button>
           <Link
             to="/dashboard"
-            className="whitespace-nowrap font-mono text-[13px] uppercase tracking-[0.06em] text-skin-text no-underline hover:text-skin-accent"
+            className="max-md:absolute max-md:inset-x-0 max-md:top-0 max-md:flex max-md:h-10 max-md:items-center max-md:justify-center max-md:border-b max-md:border-skin-border max-md:bg-skin-panel max-md:font-body max-md:normal-case max-md:tracking-normal max-md:[&>div]:min-w-0 max-md:[&>div]:px-4 max-md:[&>div]:py-0 max-md:[&_img]:hidden max-md:[&>div>div]:hidden max-md:[&_p]:m-0 max-md:[&_p]:truncate max-md:[&_p]:text-2xl max-md:[&_p]:font-normal whitespace-nowrap font-mono text-[13px] uppercase tracking-[0.06em] text-skin-text no-underline hover:text-skin-accent"
           >
-            <div className="flex gap-x-4 items-center justify-center lg:justify-start px-5 py-2.5 lg:py-3.75">
+            <div className="flex gap-x-3 items-center justify-center lg:justify-start py-2.5 lg:py-2.75">
               {
                   appLogo ? (
                       <img
                           src={appLogo}
-                          className="w-7 h- cursor-pointer duration-500"
+                          className="h-7 w-7 object-contain cursor-pointer duration-500"
                           alt="App Logo"
                       />
                   ): (
@@ -84,14 +86,15 @@ const AppNavbar = () => {
                       </div>
                   )
               }
-            
+
                   <p className="font-semibold text-[15px]">{appName || "Vram Py"}</p>
-             
+
           </div>
           </Link>
         </div>
 
         <div className="flex min-w-0 items-center gap-3.5">
+
           <div className="hidden items-center gap-2 whitespace-nowrap text-[13px] text-skin-dim lg:flex">
             <i className="fa fa-calendar-days" aria-hidden="true" />
             <span>
@@ -109,7 +112,8 @@ const AppNavbar = () => {
           <div className="relative" ref={menuRef}>
             <button
               type="button"
-              className="mt-0! flex h-9! w-auto items-center gap-2.5 border-0 bg-transparent! p-0! text-skin-text!"
+              aria-label="Open account menu"
+              className="max-md:h-11! max-md:min-w-11 max-md:border-0 max-md:bg-transparent! max-md:text-skin-text! max-md:[&>.fa-chevron-down]:hidden mt-0! flex h-9! w-auto items-center gap-2.5 border-0 bg-transparent! p-0! text-skin-text!"
               onClick={() => setShowMenu((v) => !v)}
               aria-haspopup="true"
               aria-expanded={showMenu}

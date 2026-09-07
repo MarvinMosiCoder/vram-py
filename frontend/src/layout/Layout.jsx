@@ -19,11 +19,11 @@ import { NavbarProvider } from "../context/NavbarContext";
 const Layout = ({ children }) => {
   return (
     <NavbarProvider>
-      <div className="app-shell">
+      <div className="flex h-dvh min-h-0 flex-col overflow-hidden">
         <AppNavbar />
-        <div className="app-body">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           <AppSidebar />
-          <main className="app-main">
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <AppContent>{children}</AppContent>
             <AppFooter />
           </main>

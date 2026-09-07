@@ -5,6 +5,6 @@
 // border belongs to the frame rather than to <table>. Table is now just the
 // <table> element.
 const TableContainer = ({ children, className = "" }) => {
-    return <div className={`table-container ${className}`.trim()}>{children}</div>;
+    return <div className={`overflow-x-auto rounded-[10px] border border-skin-border bg-skin-panel ${className}`.trim()}>{children}</div>;
 };
 export default TableContainer;

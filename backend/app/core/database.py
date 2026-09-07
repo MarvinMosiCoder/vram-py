@@ -1,10 +1,9 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-
-DATABASE_URL = "postgresql+psycopg2://vram:vram@localhost:5432/vram_admin"
+from app.core.config import settings
 
 engine = create_engine(
-    DATABASE_URL,
+    settings.DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=3600,
 )

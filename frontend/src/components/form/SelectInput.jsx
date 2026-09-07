@@ -1,36 +1,25 @@
 
 import Select from "react-select";
 const SelectInput = ({ value, onChange, options = [], disabled, placeholder, type= '', className = "", ...props }) => {
-    const customStyles = {
-        control: (provided) => ({
-            ...provided,
-            backgroundColor: "#101215", // Dark background (Tailwind's bg-gray-800)
-            borderColor: "#9CA3AF)", // Border color (Tailwind's border-gray-600)
-            color: "#fff", // Text color
-            boxShadow: "none",
-            "&:hover": {
-                borderColor: "#9ca3af", // Hover state border color (Tailwind's border-gray-400)
-            },
-        }),
-        singleValue: (provided) => ({
-            ...provided,
-            color: "#9CA3AF", // Ensure selected value text is white
-        }),
-        menu: (provided) => ({
-            ...provided,
-            backgroundColor: "#1f2937", // Dark background for dropdown menu
-            color: "#9CA3AF", // Dropdown text color
-        }),
-        option: (provided, state) => ({
-            ...provided,
-            backgroundColor: state.isFocused ? "#374151" : "#1f2937", // Highlight on hover (Tailwind's bg-gray-700)
-            color: "#9CA3AF", // Option text color
-            "&:active": {
-                backgroundColor: "#4b5563", // Active state background
-            },
-        }),
+    const selectClasses = {
+        control: ({ isFocused, isDisabled }) => `flex min-h-10 rounded-md border bg-skin-bg text-sm text-skin-text ${isFocused ? "border-skin-accent ring-1 ring-skin-accent" : "border-skin-border hover:border-skin-accent"} ${isDisabled ? "opacity-50" : ""}`,
+        valueContainer: () => "flex flex-wrap gap-1 px-3 py-2",
+        input: () => "text-skin-text",
+        placeholder: () => "text-skin-dim",
+        singleValue: () => "text-skin-text",
+        indicatorsContainer: () => "text-skin-dim",
+        dropdownIndicator: () => "p-2 hover:text-skin-text",
+        clearIndicator: () => "cursor-pointer p-2 hover:text-skin-text",
+        indicatorSeparator: () => "my-2 w-px bg-skin-border",
+        menu: () => "z-50! mt-1 overflow-hidden rounded-md border border-skin-border bg-skin-panel text-sm text-skin-text shadow-lg",
+        menuList: () => "py-1",
+        option: ({ isSelected, isFocused, isDisabled }) => `px-3 py-2 ${isSelected ? "bg-skin-custom text-theme-contrast" : isFocused ? "bg-skin-accent-soft text-skin-text" : "text-skin-text"} ${isDisabled ? "opacity-40" : "cursor-pointer"}`,
+        multiValue: () => "flex overflow-hidden rounded bg-skin-accent-soft",
+        multiValueLabel: () => "px-2 py-0.5 text-skin-text",
+        multiValueRemove: () => "cursor-pointer px-1 text-skin-text hover:bg-skin-border",
+        noOptionsMessage: () => "p-3 text-skin-dim",
+        loadingMessage: () => "p-3 text-skin-dim",
     };
-
 
     if (type) {
         return (
@@ -40,8 +29,9 @@ const SelectInput = ({ value, onChange, options = [], disabled, placeholder, typ
                 options={options}
                 isDisabled={disabled}
                 placeholder={placeholder}
-                className={`block w-full bg-gray-800 border-gray-300  rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${className}`.trim()}
-                styles={customStyles}
+                className={`block w-full rounded-md sm:text-sm ${className}`.trim()}
+                unstyled
+                classNames={selectClasses}
                 {...props}
             />
         );
@@ -51,7 +41,7 @@ const SelectInput = ({ value, onChange, options = [], disabled, placeholder, typ
             value={value ?? ""}
             onChange={onChange}
             disabled={disabled}
-            className={`select-input ${className}`.trim()}
+            className={`w-full rounded-md border border-skin-border bg-skin-bg px-3 py-2.5 font-body text-sm text-skin-text focus:outline-2 focus:outline-offset-1 focus:outline-skin-accent ${className}`.trim()}
             {...props}
         >
             {placeholder && <option value="">{placeholder}</option>}

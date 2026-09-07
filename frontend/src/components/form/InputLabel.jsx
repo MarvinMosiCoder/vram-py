@@ -3,9 +3,9 @@
 // which fields are mandatory.
 const InputLabel = ({ value, children, htmlFor, required, className = "" }) => {
     return (
-        <span className={`input-label ${className}`.trim()} id={htmlFor ? `${htmlFor}-label` : undefined}>
+        <span className={`text-xs text-skin-dim ${className}`.trim()} id={htmlFor ? `${htmlFor}-label` : undefined}>
             {value ?? children}
-            {required && <em className="input-required"> *</em>}
+            {required && <em className="text-skin-danger not-italic"> *</em>}
         </span>
     );
 };

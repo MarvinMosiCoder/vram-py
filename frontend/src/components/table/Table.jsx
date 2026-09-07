@@ -6,10 +6,7 @@
 // RowAction for the actions column. GeneratedModulePage composes these instead
 // of writing raw <table> markup.
 //
-// Styling note: these use the project's semantic classes rather than Tailwind
-// utilities. The .module-table rules in index.css are unlayered, so they beat
-// any utility anyway -- see docs/ARCHITECTURE.md, "Styling and theming".
 const Table = ({ children, className = "" }) => {
-    return <table className={`module-table ${className}`.trim()}>{children}</table>;
+    return <table className={`w-full border-collapse bg-skin-panel [&_tbody_tr:last-child_td]:border-b-0 [&_tbody_tr:hover]:bg-skin-accent-soft ${className}`.trim()}>{children}</table>;
 };
 export default Table;

@@ -9,7 +9,7 @@ const TextInput = ({ type = "text", value, onChange, readOnly, maxLength, classN
             onChange={onChange}
             readOnly={readOnly}
             maxLength={maxLength || undefined}
-            className={`text-input ${className}`.trim()}
+            className={`w-full rounded-md border border-skin-border bg-skin-bg px-3 py-2.5 font-body text-sm text-skin-text focus:outline-2 focus:outline-offset-1 focus:outline-skin-accent ${className}`.trim()}
             {...props}
         />
     );

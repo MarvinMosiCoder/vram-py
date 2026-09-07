@@ -1,10 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-
-const APP_NAME = "Vram Admin";
+import ApplicationName from "./ApplicationName";
 
 function formatTitle(pathname) {
   const segment = pathname.split("/").filter(Boolean).pop();
+
 
   if (!segment) {
     return "Dashboard";
@@ -17,10 +17,19 @@ function formatTitle(pathname) {
 
 export default function DocumentTitle() {
   const { pathname } = useLocation();
+  const [appName, setAppName] = useState('');
 
   useEffect(() => {
-    document.title = `${APP_NAME} | ${formatTitle(pathname)}`;
-  }, [pathname]);
+    const fetchAppName = async () => {
+      const name = await ApplicationName();
+      setAppName(name);
+    };
+    fetchAppName();
+  }, [ApplicationName]);
+
+  useEffect(() => {
+    document.title = `${appName} | ${formatTitle(pathname)}`;
+  }, [pathname, appName]);
 
   return null;
 }

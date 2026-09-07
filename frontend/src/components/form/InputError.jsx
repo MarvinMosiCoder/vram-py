@@ -6,6 +6,6 @@
 // looks up by field name.
 const InputError = ({ message, className = "" }) => {
     if (!message) return null;
-    return <span className={`input-error ${className}`.trim()}>{message}</span>;
+    return <span className={`text-xs text-skin-danger ${className}`.trim()}>{message}</span>;
 };
 export default InputError;

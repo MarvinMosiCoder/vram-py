@@ -23,7 +23,7 @@ export const ThemeProvider = ({ children, themeColor, profileData }) => {
     const [profile, setProfile] = useState(profileData || null);
 
     useEffect(() => {
-        applyThemeColor(themeColor);
+        applyThemeColor(resolveThemeColor(themeColor));
         setTheme(getThemeClass(themeColor));
     }, [themeColor]);
 
@@ -37,7 +37,7 @@ export const ThemeProvider = ({ children, themeColor, profileData }) => {
             document.documentElement.classList.remove('app-theme-dark');
             delete document.documentElement.dataset.appTheme;
         };
-    }, [theme]);
+    }, [theme, themeColor]);
 
     return (
         <ThemeContext.Provider value={{theme, setTheme}}>

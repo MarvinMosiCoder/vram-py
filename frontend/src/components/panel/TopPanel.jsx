@@ -5,9 +5,9 @@
 // from render_index()'s `module` object.
 const TopPanel = ({ title, children, className = "" }) => {
     return (
-        <div className={`top-panel ${className}`.trim()}>
-            {title && <h2 className="top-panel-title">{title}</h2>}
-            {children && <div className="top-panel-tools">{children}</div>}
+        <div className={`flex flex-wrap items-center justify-between gap-4 ${className}`.trim()}>
+            {title && <h2 className="m-0 text-lg">{title}</h2>}
+            {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
         </div>
     );
 };

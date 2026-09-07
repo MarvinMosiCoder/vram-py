@@ -4,7 +4,7 @@ const DangerButton = ({ children, className = "", disabled, type = "button", ...
         <button
             type={type}
             disabled={disabled}
-            className={`btn btn-danger ${className}`.trim()}
+            className={`m-0 w-auto cursor-pointer rounded-md border px-3.5 py-1.75 text-[13px] font-medium disabled:cursor-default disabled:opacity-40 border-skin-danger/45 bg-transparent text-skin-danger enabled:hover:bg-skin-danger-soft ${className}`.trim()}
             {...props}
         >
             {children}

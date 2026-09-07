@@ -46,7 +46,7 @@ const defaultCell = (row, column) => {
     const label = String(meta.label ?? row[column.key] ?? "—");
     if (meta.className || meta.style) {
       return (
-        <span className={meta.className || undefined} style={meta.style || undefined}>
+        <span className={meta.className?.replace(/\bstatus-badge\b/g, "inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold") || undefined} style={meta.style || undefined}>
           {label}
         </span>
       );
@@ -516,8 +516,8 @@ export default function GeneratedModulePage({
       navigate(url);
   };
 
-  if (error) return <p className="error">{error}</p>;
-  if (!data) return <p className="muted">Loading…</p>;
+  if (error) return <p className="mt-3.5 font-mono text-[13px] text-skin-danger">{error}</p>;
+  if (!data) return <p className="text-[13px] text-skin-dim">Loading…</p>;
 
   const { columns, rows, pagination, primaryKey } = data;
   const cell = renderCell ?? defaultCell;
@@ -605,14 +605,14 @@ export default function GeneratedModulePage({
   const fieldEntries = Object.entries(formFields);
 
   return (
-    <ContentPanel className="module-page">
+    <ContentPanel className="">
       {!onToast && !shared && (
         <Toast message={toast?.message} status={toast?.status} onDismiss={() => setToast(null)} />
       )}
 
       <TopPanel title={title ?? data.module.name}>
         <TextInput
-          className="module-search"
+          className="w-50! rounded-lg border border-skin-border bg-skin-panel! px-3 py-1.75 text-[13px] text-skin-text focus:border-skin-accent-dim focus:outline-none"
           placeholder="Search…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -640,7 +640,7 @@ export default function GeneratedModulePage({
 
       {showExport && (
         <ContentPanel
-          className="is-inset"
+          className="bg-skin-bg!"
           as="form"
           onSubmit={handleExport}
           onClose={() => setShowExport(false)}
@@ -651,8 +651,8 @@ export default function GeneratedModulePage({
             </PrimaryButton>
           }
         >
-          <div className="form-grid">
-            <label className="form-field">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3.5">
+            <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
               <InputLabel value="File name" />
               <TextInput
                 value={exportForm.filename}
@@ -660,7 +660,7 @@ export default function GeneratedModulePage({
                 onChange={(e) => setExportForm({ ...exportForm, filename: e.target.value })}
               />
             </label>
-            <label className="form-field">
+            <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
               <InputLabel value="Format" />
               <SelectInput
                 value={exportForm.fileformat}
@@ -668,7 +668,7 @@ export default function GeneratedModulePage({
                 onChange={(e) => setExportForm({ ...exportForm, fileformat: e.target.value })}
               />
             </label>
-            <label className="form-field">
+            <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
               <InputLabel value="Row limit" />
               <TextInput
                 type="number"
@@ -678,15 +678,15 @@ export default function GeneratedModulePage({
               />
             </label>
           </div>
-          <p className="muted">
+          <p className="text-[13px] text-skin-dim">
             The current search, filters and sort order are applied to the export.
           </p>
         </ContentPanel>
       )}
 
       {showSelection && selectedIds.length > 0 && (
-        <div className="module-bulkbar">
-          <span className="muted">{selectedIds.length} selected</span>
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-skin-border bg-skin-panel px-3 py-2.5">
+          <span className="text-[13px] text-skin-dim">{selectedIds.length} selected</span>
           {bulkOptions.map((option) => (
             <SecondaryButton
               key={option.value}
@@ -702,7 +702,7 @@ export default function GeneratedModulePage({
 
       {panel && (
         <ContentPanel
-          className="is-inset"
+          className="bg-skin-bg!"
           as="form"
           onSubmit={submitPanel}
           onClose={closePanel}
@@ -727,9 +727,9 @@ export default function GeneratedModulePage({
           {renderBeforeForm?.(formContext)}
 
           {fieldEntries.length === 0 ? (
-            <p className="muted">This module declares no form fields.</p>
+            <p className="text-[13px] text-skin-dim">This module declares no form fields.</p>
           ) : (
-            <div className="form-grid">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3.5">
               {fieldEntries.map(([name, config]) => {
                 // A wrapper page may replace any single field; returning
                 // undefined falls through to the default input below.
@@ -742,7 +742,7 @@ export default function GeneratedModulePage({
                   setPanel((p) => ({ ...p, values: { ...p.values, [name]: next } }));
 
                 return (
-                  <label className="form-field" key={name}>
+                  <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim" key={name}>
                     <InputLabel value={config.label ?? name} required={config.required} />
                     {config.type === "checkbox" ? (
                       <Checkbox checked={value} disabled={readOnly} onChange={(next) => onChange(next)} />
@@ -866,14 +866,14 @@ export default function GeneratedModulePage({
         </Table>
       </TableContainer>
 
-      {rows.length === 0 && !loading && <p className="muted">No records.</p>}
+      {rows.length === 0 && !loading && <p className="text-[13px] text-skin-dim">No records.</p>}
 
       {pagination.last_page > 1 && (
-        <div className="module-pager">
+        <div className="flex flex-wrap items-center gap-3 text-[13px]">
           <SecondaryButton disabled={page <= 1} onClick={() => setPage(page - 1)}>
             Prev
           </SecondaryButton>
-          <span className="muted">
+          <span className="text-[13px] text-skin-dim">
             Page {pagination.page} of {pagination.last_page} · {pagination.total} records
           </span>
           <SecondaryButton disabled={page >= pagination.last_page} onClick={() => setPage(page + 1)}>

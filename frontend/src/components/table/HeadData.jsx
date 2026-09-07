@@ -7,9 +7,10 @@
 // ignores anything else.
 const HeadData = ({ children, sortable, sorted, direction, onSort, sticky, center, width }) => {
     const classes = [
-        sticky ? `is-sticky-${sticky}` : "",
-        center ? "is-center" : "",
-        sortable ? "is-sortable" : "is-plain",
+        "border-b border-skin-border px-3.5 py-2.5 text-[11px] font-medium uppercase tracking-[0.08em] text-skin-dim select-none",
+        sticky ? `sticky top-0 z-40 bg-skin-panel ${sticky === "left" ? "left-0" : "right-0"}` : "",
+        center ? "text-center" : "text-left",
+        sortable ? "cursor-pointer hover:text-skin-text" : "cursor-default",
     ].filter(Boolean).join(" ");
 
     return (
@@ -21,7 +22,7 @@ const HeadData = ({ children, sortable, sorted, direction, onSort, sticky, cente
             scope="col"
         >
             {children}
-            {sorted && <span className="sort-caret">{direction === "asc" ? " ▲" : " ▼"}</span>}
+            {sorted && <span className="text-skin-accent">{direction === "asc" ? " ▲" : " ▼"}</span>}
         </th>
     );
 };

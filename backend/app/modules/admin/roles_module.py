@@ -1,3 +1,5 @@
+import re
+
 from fastapi import HTTPException
 from sqlalchemy import func, select
 
@@ -81,8 +83,11 @@ class RolesController(ModuleController):
         payload["name"] = (payload.get("name") or "").strip()
         color = (payload.get("theme_color") or "").strip().lower()
         if color:
-            payload["theme_color"] = color if color.startswith("#") else "#" + color
+            payload["theme_color"] = "#" + color if re.fullmatch(r"[0-9a-f]{6}", color) else color
         return payload
+
+    def before_update(self, payload, record_id):
+        return self.before_store(payload)
 
     def after_store(self, payload, record_id):
         # Seed this role's privilege rows / write an audit entry here.

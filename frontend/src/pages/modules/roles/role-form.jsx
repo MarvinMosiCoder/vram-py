@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../../api";
 import { useOptionalToast } from "../../../context/ToastContext";
+import { useAuth } from "../../../context/AuthContext";
 import { useTheme } from "../../../context/ThemeContext";
 import useThemeStyles from "../../../hooks/useThemeStyles";
 import { legacyThemeOptions } from "../../../config/themeOptions";
@@ -35,6 +36,7 @@ const THEME_OPTIONS = legacyThemeOptions.map(({ id, name }) => ({ value: id, lab
 // NOT `moduleses`/`row` props, which nothing in this SPA ever supplies
 // (those were the Laravel/Inertia original's server-pushed props).
 export function RoleForm({ action, args = [] }) {
+  const { user, refreshUser } = useAuth();
   const isEdit = action === "edit";
   const [id] = args;
 
@@ -133,6 +135,15 @@ export function RoleForm({ action, args = [] }) {
         ? await api.post("/roles/update", { ...payload, id })
         : await api.post("/roles/store", payload);
 
+        if (isEdit && String(user?.role_id) === String(id)) {
+          try {
+            await refreshUser();
+          } catch {
+            toast?.handleToast("Role saved. Reload the page to refresh your theme.", "danger");
+            navigate("/roles");
+            return;
+          }
+        }
         toast?.handleToast(res.data?.message || "Saved.", res.data?.status || "success");
         navigate("/roles");
     } catch (err) {
@@ -149,7 +160,7 @@ export function RoleForm({ action, args = [] }) {
   };
 
 
-  if (loading) return <p className="muted">Loading…</p>;
+  if (loading) return <p className="text-[13px] text-skin-dim">Loading…</p>;
 
   return (
     <Card
@@ -163,14 +174,14 @@ export function RoleForm({ action, args = [] }) {
       marginBottom={4}
     >
       <form onSubmit={submit}>
-        <div className="form-grid">
-          <label className="form-field">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3.5">
+          <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
             <InputLabel value="Role" required />
             <TextInput value={values.name} maxLength={255} onChange={(e) => set("name")(e.target.value)} />
             <InputError message={errors.name} />
           </label>
 
-          <label className="form-field">
+          <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
             <InputLabel value="Superadmin" />
             <Checkbox
               checked={values.is_superadmin}
@@ -182,7 +193,7 @@ export function RoleForm({ action, args = [] }) {
             <InputError message={errors.is_superadmin} />
           </label>
 
-          <label className="form-field">
+          <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
             <InputLabel value="Theme" />
             <SelectInput
               value={values.theme_color}

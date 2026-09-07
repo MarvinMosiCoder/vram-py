@@ -63,12 +63,17 @@ const customHexPattern = /^#[0-9A-Fa-f]{6}$/;
 
 export const isCustomThemeColor = (value) => customHexPattern.test(value || '');
 
-export const normalizeThemePreference = (preference) =>
-    supportedThemeIds.has(preference) || isCustomThemeColor(preference) ? preference : SYSTEM_THEME_ID;
+export const normalizeThemePreference = (preference) => {
+    // Older role creation prefixed named skins with '#'. Read those values
+    // compatibly so existing roles recover without rewriting the database.
+    const value = typeof preference === 'string' ? preference.trim().replace(/^#(?=skin-)/, '') : preference;
+    return supportedThemeIds.has(value) || isCustomThemeColor(value) ? value : SYSTEM_THEME_ID;
+};
 
 export const resolveThemeColor = (preference, systemTheme = 'skin-blue') => {
     const normalizedSystemTheme = supportedThemeIds.has(systemTheme) ? systemTheme : 'skin-blue';
-    return normalizeThemePreference(preference) === SYSTEM_THEME_ID ? normalizedSystemTheme : preference;
+    const normalized = normalizeThemePreference(preference);
+    return normalized === SYSTEM_THEME_ID ? normalizedSystemTheme : normalized;
 };
 
 // Returns the `bg-skin-*` spelling every consumer compares against --
@@ -92,7 +97,7 @@ export const isDashboardPaletteTheme = (themeClassOrId) =>
 // reads from the same set of CSS custom properties.
 export const applyThemeColor = (themeColor) => {
     if (typeof document === 'undefined') return;
-    const hex = getThemeHex(themeColor);
+    const hex = getThemeHex(themeColor) || getThemeHex(resolveThemeColor(themeColor));
     if (!hex) return;
     const red = parseInt(hex.slice(1, 3), 16);
     const green = parseInt(hex.slice(3, 5), 16);
@@ -110,6 +115,17 @@ export const applyThemeColor = (themeColor) => {
     document.documentElement.style.setProperty('--app-theme-soft-strong', `rgba(${red}, ${green}, ${blue}, 0.18)`);
     document.documentElement.style.setProperty('--app-theme-border', `rgba(${red}, ${green}, ${blue}, 0.34)`);
     document.documentElement.style.setProperty('--app-theme-deep', `rgba(${red}, ${green}, ${blue}, 0.28)`);
+
+    // Runtime colors consumed by Tailwind's theme utilities. Keep surfaces and
+    // accent tokens together so switching roles also resets light/dark colors.
+    const isDark = resolveThemeColor(themeColor?.replace(/^bg-/, '')) === 'skin-black';
+    const surfaces = isDark
+        ? { '--bg': '#07080a', '--panel': '#101318', '--panel-border': '#1f242d', '--text': '#f1f0ec', '--text-dim': '#9aa0ad', '--danger': '#e2665a', '--danger-soft': 'rgba(226, 102, 90, 0.14)' }
+        : { '--bg': '#f3f4f6', '--panel': '#ffffff', '--panel-border': '#d1d5db', '--text': '#111827', '--text-dim': '#6b7280', '--danger': '#b42318', '--danger-soft': 'rgba(180, 35, 24, 0.12)' };
+    const accent = isDark ? 'var(--app-theme-light)' : 'var(--app-theme-readable)';
+    for (const [name, value] of Object.entries({ ...surfaces, '--accent': accent, '--accent-dim': accent, '--accent-soft': 'var(--app-theme-soft-strong)' })) {
+        document.documentElement.style.setProperty(name, value);
+    }
 };
 
 export default legacyThemeOptions;

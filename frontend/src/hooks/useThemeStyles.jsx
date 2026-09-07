@@ -478,7 +478,22 @@ const useThemeStyles = (theme) => {
         sidebarBorderColor: 'border-white',
         whiteBgCoror: '',
     };
-    const value = (key) => styles[key][theme] ?? themeFallbacks[key];
+    const sharedTokens = {
+        textColor: 'text-skin-text',
+        textColorActive: 'text-theme-contrast',
+        hoverTextColor: 'hover:text-skin-text',
+        hoverBgColor: 'hover:bg-skin-accent-soft',
+        bgColor: 'bg-skin-panel',
+        borderColor: 'border-skin-border',
+        borderTheme: 'border-skin-border',
+        sideBarTextColor: 'text-skin-text',
+        sideBarBgColor: 'bg-skin-panel',
+        iconThemeColor: 'text-skin-dim',
+        sidebarBorderColor: 'border-skin-border',
+        bulkActionTextColor: 'text-skin-text',
+        bulkActionCancelButtonColor: 'bg-skin-panel',
+    };
+    const value = (key) => sharedTokens[key] ?? styles[key][theme] ?? themeFallbacks[key];
 
     return {
         textColor:                    value('textColor'),

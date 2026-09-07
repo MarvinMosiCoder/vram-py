@@ -5,17 +5,17 @@
 // until `message` is non-empty, and the provider clears that after its
 // duration, so this component owns no timer of its own.
 const TYPES = {
-    success: "is-success",
-    danger: "is-danger",
-    error: "is-danger",
-    warning: "is-warning",
-    info: "is-info",
+    success: "border-skin-accent-dim text-skin-accent",
+    danger: "border-skin-danger/45 text-skin-danger",
+    error: "border-skin-danger/45 text-skin-danger",
+    warning: "border-amber-500/45 text-amber-600",
+    info: "border-skin-border text-skin-text",
 };
 
 const DissapearingToast = ({ type, message }) => {
     if (!message) return null;
     return (
-        <div className={`toast ${TYPES[type] || "is-info"}`} role="status">
+        <div className={`flex items-center gap-3 rounded-lg border bg-skin-panel px-3.5 py-2.5 text-[13px] ${TYPES[type] || "border-skin-border text-skin-text"}`} role="status">
             {message}
         </div>
     );

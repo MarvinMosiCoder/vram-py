@@ -3,7 +3,7 @@
 const TableRow = ({ children, onClick, selected }) => {
     return (
         <tr
-            className={selected ? "is-selected" : undefined}
+            className={selected ? "bg-skin-accent-soft" : undefined}
             onClick={onClick}
             style={onClick ? { cursor: "pointer" } : undefined}
         >

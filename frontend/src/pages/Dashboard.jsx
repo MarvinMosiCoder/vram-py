@@ -22,20 +22,20 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="grid">
-        <div className="card">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 p-7">
+        <div className="rounded-[10px] border border-skin-border bg-skin-panel p-5 [&_h3]:mb-1.5 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:text-skin-dim">
           <h3>Your role</h3>
-          <div className="value">{user?.role_id}</div>
+          <div className="font-mono text-2xl">{user?.role_id}</div>
         </div>
 
-        <div className={`card ${canEdit ? "" : "locked"}`}>
+        <div className={`rounded-[10px] border border-skin-border bg-skin-panel p-5 [&_h3]:mb-1.5 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:text-skin-dim ${canEdit ? "" : "opacity-40"}`}>
           <h3>Content area</h3>
-          <div className="value">{canEdit ? "Open" : "Restricted"}</div>
+          <div className="font-mono text-2xl">{canEdit ? "Open" : "Restricted"}</div>
         </div>
 
-        <div className={`card ${isAdmin ? "" : "locked"}`}>
+        <div className={`rounded-[10px] border border-skin-border bg-skin-panel p-5 [&_h3]:mb-1.5 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:text-skin-dim ${isAdmin ? "" : "opacity-40"}`}>
           <h3>Total users</h3>
-          <div className="value">{isAdmin ? (userCount ?? "…") : "Admin only"}</div>
+          <div className="font-mono text-2xl">{isAdmin ? (userCount ?? "…") : "Admin only"}</div>
         </div>
       </div>
     </div>

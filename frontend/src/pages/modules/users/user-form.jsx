@@ -102,7 +102,7 @@ export function UserForm({ action, args = [] }) {
     }
   };
 
-  if (loading) return <p className="muted">Loading…</p>;
+  if (loading) return <p className="text-[13px] text-skin-dim">Loading…</p>;
 
   return (
     <Card
@@ -115,14 +115,14 @@ export function UserForm({ action, args = [] }) {
       marginBottom={4}
     >
       <form onSubmit={submit}>
-        <div className="form-grid">
-          <label className="form-field">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3.5">
+          <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
             <InputLabel value="Name" required />
             <TextInput value={values.name} maxLength={255} onChange={(e) => set("name")(e.target.value)} />
             <InputError message={errors.name} />
           </label>
 
-          <label className="form-field">
+          <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
             <InputLabel value="Email" required />
             <TextInput
               type="email"
@@ -133,7 +133,7 @@ export function UserForm({ action, args = [] }) {
             <InputError message={errors.email} />
           </label>
 
-          <label className="form-field">
+          <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
             <InputLabel value="Role" required />
             <SelectInput
               type="react-select"
@@ -145,7 +145,7 @@ export function UserForm({ action, args = [] }) {
             <InputError message={errors.id_adm_role} />
           </label>
 
-          <label className="form-field">
+          <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
             <InputLabel value={isEdit ? "New password" : "Password"} required={!isEdit} />
             <TextInput
               type="password"

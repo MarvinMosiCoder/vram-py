@@ -2,7 +2,7 @@
 
 FastAPI (Python) backend + React (Vite) frontend on PostgreSQL, with JWT
 auth and role-based access control (admin / editor / viewer). Styling is
-hand-written CSS plus Tailwind v4, sharing one palette that follows the
+Tailwind v4 utilities, sharing one palette that follows the
 signed-in user's role theme — see
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#styling-and-theming).
 

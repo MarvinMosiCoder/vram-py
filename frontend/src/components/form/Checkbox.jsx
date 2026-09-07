@@ -10,7 +10,7 @@ const Checkbox = ({ checked, onChange, disabled, className = "", ...props }) => 
             checked={Boolean(checked)}
             disabled={disabled}
             onChange={(e) => onChange?.(e.target.checked ? 1 : 0, e)}
-            className={`checkbox-input ${className}`.trim()}
+            className={`size-4 shrink-0 self-start accent-skin-accent focus:outline-2 focus:outline-offset-1 focus:outline-skin-accent ${className}`.trim()}
             {...props}
         />
     );

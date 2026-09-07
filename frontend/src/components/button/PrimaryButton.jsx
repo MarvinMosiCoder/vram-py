@@ -1,12 +1,10 @@
-// Laravel Breeze's PrimaryButton, ported. The `button` element rule in
-// index.css already paints the accent fill, so this mostly exists to give
-// pages a named component instead of a bare <button>.
+// Shared primary action, styled with the active Tailwind theme tokens.
 const PrimaryButton = ({ children, className = "", disabled, type = "submit", ...props }) => {
     return (
         <button
             type={type}
             disabled={disabled}
-            className={`btn btn-primary ${className}`.trim()}
+            className={`m-0 w-auto cursor-pointer rounded-md border px-3.5 py-1.75 text-[13px] font-medium disabled:cursor-default disabled:opacity-40 border-skin-accent bg-skin-custom text-theme-contrast enabled:hover:brightness-90 ${className}`.trim()}
             {...props}
         >
             {children}
