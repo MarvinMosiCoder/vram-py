@@ -9,6 +9,8 @@ import Login from "./pages/auth/Login";
 import Dashboard from "./pages/Dashboard";
 import ModuleRoute from "./pages/ModuleRoute";
 import Profile from "./pages/modules/users/Profile";
+import AnnouncementsModal from "./components/modal/AnnoucementModal";
+import api from "./api";
 
 function Themed({ children }) {
   const { user } = useAuth();
@@ -29,6 +31,51 @@ function ProfileRoute() {
   return <Profile page_title="Profile" user={user} />;
 }
 
+function AnnouncementGate() {
+  const { user, announcementQueue, setAnnouncementQueue } = useAuth();
+
+  if (!user || announcementQueue.length === 0) {
+    return null;
+  }
+
+  const currentAnnouncement = announcementQueue[0];
+
+  const handleAnnouncementNext = async () => {
+    if (!currentAnnouncement) return;
+
+    try {
+      await api.post(`/announcements/${currentAnnouncement.id}/read`);
+    } catch (error) {
+      console.error("Failed to mark announcement as read:", error);
+    }
+
+    setAnnouncementQueue((prev) => prev.slice(1));
+  };
+
+  return (
+    <AnnouncementsModal
+      show={!!currentAnnouncement}
+      onClose={() => setAnnouncementQueue((prev) => prev.slice(1))}
+      title={currentAnnouncement.title || "Announcement"}
+      theme="bg-skin-blue"
+      fontColor="text-white"
+      withButton
+      currentIndex={0}
+      total={announcementQueue.length}
+      createdAt={currentAnnouncement.created_at}
+      onClick={handleAnnouncementNext}
+      loading={false}
+      isDisabled={false}
+    >
+      <div className="space-y-3">
+        <p className="m-0 text-[15px] leading-7 text-gray-700">
+          {currentAnnouncement.message || currentAnnouncement.content || "You have a new announcement."}
+        </p>
+      </div>
+    </AnnouncementsModal>
+  );
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -36,6 +83,8 @@ export default function App() {
 
       <Themed>
         <SidebarProvider>
+          <AnnouncementGate />
+
           <Routes>
             <Route path="/login" element={<Login />} />
 

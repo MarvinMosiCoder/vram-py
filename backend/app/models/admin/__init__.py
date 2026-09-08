@@ -18,6 +18,7 @@ from app.models.admin.adm_settings import Modules as AdmSettings
 from app.models.admin.adm_user_profiles import AdmUserProfiles
 from app.models.admin.adm_notifications import AdminNotifications
 from app.models.admin.adm_announcements import AdminAnnouncements
+from app.models.admin.adm_password_history import AdminPasswordHistory
 
 __all__ = [
         "Role", 
@@ -28,5 +29,6 @@ __all__ = [
         "AdmSettings", 
         "AdmUserProfiles",
         "AdminNotifications",
-        "AdminAnnouncements"
+        "AdminAnnouncements",
+        "AdminPasswordHistory",
     ]

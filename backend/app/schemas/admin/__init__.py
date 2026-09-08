@@ -9,7 +9,8 @@ from app.schemas.admin.adm_roles_privileges import AdminRolesPrivileges
 from app.schemas.admin.adm_settings import AdmSettingsOut
 from app.schemas.admin.adm_user_profiles import AdmUserProfilesOut
 from app.schemas.admin.adm_notifications import AdmNotificationsOut
-from app.schemas.admin.adm_announcements import AdmAnnouncements
+from app.schemas.admin.adm_announcements import AdmAnnouncementsOut
+from app.schemas.admin.adm_password_history import AdmPasswordHistoryOut
 
 __all__ = [
     "UserCreate",
@@ -21,6 +22,7 @@ __all__ = [
     "AdminRolesPrivileges",
     "AdmSettingsOut",
     "AdmUserProfilesOut",
-    "AdmNotificationsOut"
-    "AdmAnnouncements"
+    "AdmNotificationsOut",
+    "AdmAnnouncementsOut",
+    "AdmPasswordHistoryOut"
 ]

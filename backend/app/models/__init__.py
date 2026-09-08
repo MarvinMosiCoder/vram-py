@@ -16,6 +16,7 @@ from app.models.admin import (
     User,
     AdminNotifications,
     AdminAnnouncements,
+    AdminPasswordHistory,
 )
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "AdmUserProfiles",
     "AdminNotifications",
     "AdminAnnouncements",
+    "AdminPasswordHistory"
 ]

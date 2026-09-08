@@ -15,6 +15,7 @@ from app.schemas.admin import (
     AdmNotificationsOut,
     AdmAnnouncementsOut,
     AdmUserProfilesOut,
+    AdmAnnouncementsOut,
 )
 
 __all__ = [
@@ -26,6 +27,6 @@ __all__ = [
     "MenuOut"
     "AdmNotificationsOut",
     "AdmAnnouncementsOut",
-    "AdmUserProfilesOut"
-
+    "AdmUserProfilesOut",
+    "AdmAnnouncementsOut",
 ]

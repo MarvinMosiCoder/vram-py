@@ -6,6 +6,20 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [announcementQueue, setAnnouncementQueue] = useState([]);
+
+  async function loadAnnouncements() {
+    try {
+      const { data } = await api.get("/announcements/unread");
+      const nextQueue = Array.isArray(data) ? data : [];
+      setAnnouncementQueue(nextQueue);
+      return nextQueue;
+    } catch (error) {
+      console.error("Failed to load announcements", error);
+      setAnnouncementQueue([]);
+      return [];
+    }
+  }
 
   // On first load, if a token is already saved (from a previous
   // session), try to fetch who it belongs to.
@@ -15,9 +29,13 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return;
     }
+
     api
       .get("/me")
-      .then((res) => setUser(res.data))
+      .then(async (res) => {
+        setUser(res.data);
+        await loadAnnouncements();
+      })
       .catch(() => localStorage.removeItem("token"))
       .finally(() => setLoading(false));
   }, []);
@@ -34,6 +52,7 @@ export function AuthProvider({ children }) {
 
     const me = await api.get("/me");
     setUser(me.data);
+    await loadAnnouncements();
   }
 
   async function refreshUser() {
@@ -45,10 +64,22 @@ export function AuthProvider({ children }) {
   function logout() {
     localStorage.removeItem("token");
     setUser(null);
+    setAnnouncementQueue([]);
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        logout,
+        refreshUser,
+        announcementQueue,
+        setAnnouncementQueue,
+        loadAnnouncements,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
