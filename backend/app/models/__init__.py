@@ -14,6 +14,8 @@ from app.models.admin import (
     Modules,
     Role,
     User,
+    AdminNotifications,
+    AdminAnnouncements,
 )
 
 __all__ = [
@@ -24,4 +26,6 @@ __all__ = [
     "AdminRolesPrivileges",
     "AdmSettings",
     "AdmUserProfiles",
+    "AdminNotifications",
+    "AdminAnnouncements",
 ]

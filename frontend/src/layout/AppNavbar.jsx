@@ -9,6 +9,8 @@ import SecondaryButton from "../components/button/SecondaryButton";
 import DangerButton from "../components/button/DangerButton";
 import ApplicationLogo from "../components/system/ApplicationLogo";
 import ApplicationName from "../components/system/ApplicationName";
+import api from "../api";
+import Notification from "../components/notification/Notification";
 
 const AppNavbar = () => {
   const { user, logout } = useAuth();
@@ -21,6 +23,10 @@ const AppNavbar = () => {
   const menuRef = useRef(null);
   const [appLogo, setAppLogo] = useState('');
   const [appName, setAppName] = useState('');
+  const [notifications, setNotifications] = useState([]);
+  const [unreadnNotifications, setUnreadnNotifications] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showDateTime, setShowDateTime] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -55,6 +61,51 @@ const AppNavbar = () => {
   const confirmLogout = () => {
     setShowLogoutConfirm(false);
     logout();
+  };
+
+  useEffect(() => {
+    api
+      .get("/notification/notifications")
+      .then((response) => {
+        setNotifications(response.data.notifications || []);
+        setUnreadnNotifications(response.data.unread_count || 0);
+      })
+      .catch((error) => {
+        console.error("Failed to fetch notifications:", error);
+      });
+  }, []);
+
+  const handleToggleNotification = () => {
+    setShowNotifications((value) => !value);
+    setShowMenu(false);
+    setShowDateTime(false);
+  };
+
+  const readNotification = async (e, id) => {
+    if (!id) return;
+
+    try {
+      await api.post("/notification/read", { notification_id: id });
+
+      setNotifications((prevNotifications) =>
+        prevNotifications.map((notification) =>
+          notification.id === id ? { ...notification, is_read: true } : notification
+        )
+      );
+      setUnreadnNotifications((prevCount) => Math.max(prevCount - 1, 0));
+    } catch (error) {
+      console.error("Failed to mark as read:", error.response?.data || error.message);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+      try {
+          await api.post('/read-all');
+          setNotifications((prevNotifications) => prevNotifications.map((notification) => ({ ...notification, is_read: true })));
+          setUnreadnNotifications(0);
+      } catch (error) {
+          console.error('Failed to mark all as read:', error.response?.data || error.message);
+      }
   };
 
   return (
@@ -111,6 +162,56 @@ const AppNavbar = () => {
               })}
             </span>
           </div>
+
+          <div className="relative cursor-pointer" onClick={handleToggleNotification}>
+              <div className={`flex h-10 w-10 items-center justify-center rounded-lg border`}>
+                  <i className={`fa fa-bell text-[19px]`}></i>
+                  {
+                      unreadnNotifications > 0 && (
+                          <div className={`absolute top-0.5 right-0.5 bg-red-500 text-[10px] font-bold rounded-full min-w-4 h-4 px-1 flex items-center justify-center`}>
+                              {unreadnNotifications}
+                          </div>
+                      )
+                  }
+                  
+              </div>
+          </div>
+
+          {showNotifications && (
+              <div className="absolute right-1 top-18 z-50 w-83 max-h-97.5 rounded-lg border border-skin-border bg-skin-panel py-3 shadow-lg">
+                  <div className="flex items-center justify-between gap-5 border-b border-skin-border px-3 pb-2 min-w-75 w-83">
+                      <span className="text-sm font-semibold text-skin-text"><i className="fa fa-info-circle mr-2" aria-hidden="true"></i> Notifications</span>
+                  </div>
+                  <div className="mb-2">
+                      <div className="max-h-62.5 overflow-y-auto overflow-x-hidden">
+                          {notifications.length > 0 ? (
+                              notifications.map((notification) => (
+                                  <Notification
+                                      key={notification.id}
+                                      id={notification.id}
+                                      message={notification.content}
+                                      type={notification.type}
+                                      isRead={notification.is_read}
+                                      onClick={readNotification}
+                                      created={notification.created_at}
+                                  />
+                              ))
+                          ) : (
+                              <div className="px-4 py-3 text-sm text-skin-dim">No notifications available</div>
+                          )}
+                      </div>
+                      <div className="mt-5 px-2">
+                          <Link
+                              to="/notifications/view-all-notifications"
+                              className="flex w-full items-center justify-center rounded-md border border-skin-border bg-skin-panel px-4 py-2 text-sm font-medium text-skin-text transition hover:bg-skin-border"
+                          >
+                              View all notifications
+                          </Link>
+                      </div>
+                  </div>
+              </div>
+          
+          )}
 
           <div className="relative" ref={menuRef}>
             <button

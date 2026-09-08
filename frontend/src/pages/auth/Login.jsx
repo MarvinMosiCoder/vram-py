@@ -182,7 +182,7 @@ export default function LoginPage() {
                   </div>
                 </label>
 
-                <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
+                <label className="m-0 flex flex-col mt-2 gap-1.5 text-[13px] text-skin-dim">
                   <InputLabel value="Password"  />
                   <div className="relative [&_input]:pl-8.5 [&_input]:pr-10">
                     <i className="fa fa-lock pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[13px] text-skin-dim" />

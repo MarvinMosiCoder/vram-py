@@ -16,5 +16,17 @@ from app.models.admin.user import User
 from app.models.admin.adm_roles_privileges import AdminRolesPrivileges
 from app.models.admin.adm_settings import Modules as AdmSettings
 from app.models.admin.adm_user_profiles import AdmUserProfiles
+from app.models.admin.adm_notifications import AdminNotifications
+from app.models.admin.adm_announcements import AdminAnnouncements
 
-__all__ = ["Role", "User", "Modules", "Menuses", "AdminRolesPrivileges", "AdmSettings", "AdmUserProfiles"]
+__all__ = [
+        "Role", 
+        "User", 
+        "Modules", 
+        "Menuses", 
+        "AdminRolesPrivileges", 
+        "AdmSettings", 
+        "AdmUserProfiles",
+        "AdminNotifications",
+        "AdminAnnouncements"
+    ]

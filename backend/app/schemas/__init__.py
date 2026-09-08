@@ -11,7 +11,10 @@ from app.schemas.admin import (
     Token,
     UserCreate,
     UserLogin,
-    UserOut
+    UserOut,
+    AdmNotificationsOut,
+    AdmAnnouncementsOut,
+    AdmUserProfilesOut,
 )
 
 __all__ = [
@@ -21,4 +24,8 @@ __all__ = [
     "Token",
     "ModuleOut",
     "MenuOut"
+    "AdmNotificationsOut",
+    "AdmAnnouncementsOut",
+    "AdmUserProfilesOut"
+
 ]

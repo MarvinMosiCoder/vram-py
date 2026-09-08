@@ -25,3 +25,8 @@ class User(Base):
     updated_at = Column(DateTime, nullable=True)
     role = relationship("Role", back_populates="users")
     profile = relationship("AdmUserProfiles", back_populates="user")
+    notifications = relationship(
+        "AdminNotifications",
+        back_populates="user",
+        foreign_keys="[AdminNotifications.adm_user_id]",
+    )
