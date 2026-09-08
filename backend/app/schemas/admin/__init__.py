@@ -8,8 +8,8 @@ from app.schemas.admin.user import UserCreate, UserLogin, UserOut
 from app.schemas.admin.adm_roles_privileges import AdminRolesPrivileges
 from app.schemas.admin.adm_settings import AdmSettingsOut
 from app.schemas.admin.adm_user_profiles import AdmUserProfilesOut
-from app.schedmas.admin.adm_notifications import AdmNotificationsOut
-from app.schedma.admin.adm_announcements import AdmAnnouncements
+from app.schemas.admin.adm_notifications import AdmNotificationsOut
+from app.schemas.admin.adm_announcements import AdmAnnouncements
 
 __all__ = [
     "UserCreate",
