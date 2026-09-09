@@ -264,6 +264,16 @@ const AppNavbar = () => {
                     <span className="min-w-0 flex-1 font-poppins">Profile</span>
                     <i className="fa fa-chevron-right text-[8px] text-(--das-text-soft)" />
                 </Link>
+                <Link
+                    to="/chat"
+                    className="flex min-h-10.5 items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-(--das-text) transition hover:bg-(--das-hover)"
+                    onClick={() => {
+                        setShowMenu(false);
+                    }}
+                >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-(--app-theme-soft) text-(--app-theme-readable)"><i className='fa fa-message text-[11px]' /></span>
+                    <span className="min-w-0 flex-1 font-poppins">Chat AI</span>
+                </Link>
                 <button
                   type="button"
                   className="mt-0! flex h-auto! w-full! items-center gap-2.5 border-0 bg-transparent! px-4 py-2.5 text-left text-[13px] text-skin-danger! hover:bg-skin-danger-soft!"

@@ -9,3 +9,5 @@ alembic
 psycopg2-binary
 openpyxl
 pydantic-settings
+google-genai
+python-dotenv
