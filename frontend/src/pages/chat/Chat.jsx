@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Bot, MessageSquarePlus, PanelLeft, ArrowUp, Plus, ChevronDown, Sparkles, Trash2, User, X, Ellipsis } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Bot, MessageSquarePlus, PanelLeft, ArrowUp, Plus, ChevronDown, Sparkles, Trash2, User, X, Ellipsis, PenIcon, DeleteIcon, Archive, Pin } from "lucide-react";
 import api from "../../api";
 import MarkdownMessage from "./MarkdownMessage";
 import { formatToastMessage, useToast } from "../../context/ToastContext";
@@ -31,14 +31,46 @@ const Chat = () => {
     const [railOpen, setRailOpen] = useState(false);
     const composerRef = useRef(null);
     const messagesEndRef = useRef(null);
+    const panelRef = useRef(null);
     const [conversationId, setConversationId] = useState(null);
     const [conversations, setConversations] = useState([]);
+    const [panelHeight, setPanelHeight] = useState(null);
     const [model, setModel] = useState("gemini-3.6-flash");
     const [responseLength, setResponseLength] = useState("medium");
     const { handleToast } = useToast();
+    const [openSettings, setOpenSettings] = useState(null);
     useEffect(() => {
             messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, loading]);
+
+    useLayoutEffect(() => {
+        const panel = panelRef.current;
+        const container = panel?.closest("#app-content");
+
+        if (!panel || !container) return undefined;
+
+        const measure = () => {
+            const styles = getComputedStyle(container);
+            const offsetWithin =
+                panel.getBoundingClientRect().top -
+                container.getBoundingClientRect().top +
+                container.scrollTop;
+            const gapBelow =
+                (parseFloat(styles.paddingBottom) || 0) +
+                (parseFloat(getComputedStyle(panel.parentElement).paddingBottom) || 0);
+
+            setPanelHeight(Math.max(container.clientHeight - offsetWithin - gapBelow, 360));
+        };
+
+        measure();
+
+        const observer = new ResizeObserver(measure);
+
+        observer.observe(container);
+        observer.observe(panel.parentElement);
+
+        return () => observer.disconnect();
+    }, []);
 
     const fetchConversations = () => {
         api.get("/chat/conversations")
@@ -149,7 +181,11 @@ const Chat = () => {
     };
 
     return (
-        <section className="flex min-h-0 flex-1 bg-skin-bg p-3 font-body sm:p-5">
+        <section
+            ref={panelRef}
+            style={panelHeight ? { height: `${panelHeight}px` } : undefined}
+            className="flex min-h-0 flex-1 bg-skin-bg p-3 font-body sm:p-5"
+        >
             <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-2xl border border-skin-border bg-skin-panel shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
                 {railOpen && <button type="button" aria-label="Close conversations" className="absolute inset-0 z-10 bg-slate-950/20 lg:hidden" onClick={() => setRailOpen(false)} />}
                 <aside className={`absolute inset-y-0 left-0 z-20 flex w-[min(82vw,280px)] flex-col border-r border-skin-border bg-skin-panel transition-transform duration-200 lg:static lg:translate-x-0 ${railOpen ? "translate-x-0" : "-translate-x-full"}`}>
@@ -165,7 +201,7 @@ const Chat = () => {
                         ) : (
                             <ul className="m-0 flex list-none flex-col gap-1 p-0">
                                 {conversations.map((conversation) => (
-                                    <li key={conversation.id}>
+                                    <li key={conversation.id} className="group">
                                         <button
                                             type="button"
                                             onClick={() => openConversation(conversation.id)}
@@ -179,8 +215,33 @@ const Chat = () => {
                                                 <span className="block truncate text-xs font-semibold text-skin-text">{conversation.title || "New conversation"}</span>
                                                 <span className="mt-1 block truncate text-[11px] text-skin-dim">{formatUpdatedAt(conversation.updated_at)}</span>
                                             </span>
-                                             <span className="mt-0.5 size-7 shrink-0 items-center float-right text-white hover:cursor-pointer">
+                                             <span onClick={() =>setOpenSettings(openSettings === conversation.id ? null : conversation.id)} 
+                                                className="ml-auto mt-0.5 flex size-7 shrink-0 items-center justify-center text-skin-dim hover:cursor-pointer hover:text-skin-text opacity-0 -translate-x-1.25 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0">
                                                 <Ellipsis size={14}/>
+                                                 {openSettings === conversation.id && (
+                                                    <div
+                                                        className="
+                                                        absolute right-0 top-full mt-2
+                                                        w-40 rounded-lg border bg-white shadow-lg
+                                                        z-50
+                                                        "
+                                                    >
+                                                        <button className="block w-full px-4 py-2 text-left hover:bg-gray-100">
+                                                            <PenIcon /> Rename
+                                                        </button>
+                                                        <button className="block w-full px-4 py-2 text-left hover:bg-gray-100">
+                                                            <Pin /> Pin
+                                                        </button>
+                                                        <button className="block w-full px-4 py-2 text-left hover:bg-gray-100">
+                                                            <Archive /> Archive
+                                                        </button>
+
+                                                        <button className="block w-full px-4 py-2 text-left hover:bg-gray-100">
+                                                            <DeleteIcon />Delete
+                                                        </button>
+
+                                                    </div>
+                                                  )}
                                             </span>
                                         </button>
                                         
@@ -228,7 +289,7 @@ const Chat = () => {
                                     maxLength={MAX_MESSAGE_LENGTH}
                                     aria-label="Your message"
                                     placeholder="Ask for follow-up changes"
-                                    className="block min-h-14 w-full resize-none bg-transparent px-1 py-1 text-[15px] text-skin-text outline-none placeholder:text-skin-dim"
+                                    className="block w-full resize-none bg-transparent px-1 py-1 text-[15px] text-skin-text outline-none placeholder:text-skin-dim"
                                 />
                                 <div className="mt-2 flex items-center gap-2">
                                     <button
@@ -275,7 +336,7 @@ const Chat = () => {
                                     </button>
                                 </div>
                             </div>
-                            <p className="mt-2 text-right text-[10px] text-skin-dim">
+                            <p className="mt-0.5 text-right text-[10px] text-skin-dim">
                                 {input.length} / {MAX_MESSAGE_LENGTH} characters
                             </p>
                         </form>
