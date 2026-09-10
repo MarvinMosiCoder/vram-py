@@ -30,3 +30,8 @@ class User(Base):
         back_populates="user",
         foreign_keys="[AdminNotifications.adm_user_id]",
     )
+    chat_conversations = relationship(
+        "ChatConversations",
+        back_populates="user",
+        foreign_keys="[ChatConversations.adm_user_id]",
+    )

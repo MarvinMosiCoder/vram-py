@@ -19,6 +19,7 @@ from app.models.admin.adm_user_profiles import AdmUserProfiles
 from app.models.admin.adm_notifications import AdminNotifications
 from app.models.admin.adm_announcements import AdminAnnouncements
 from app.models.admin.adm_password_history import AdminPasswordHistory
+from app.models.admin.chat_conversations import ChatConversations
 
 __all__ = [
         "Role", 
@@ -31,4 +32,5 @@ __all__ = [
         "AdminNotifications",
         "AdminAnnouncements",
         "AdminPasswordHistory",
+        "ChatConversations",
     ]

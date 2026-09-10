@@ -10,6 +10,7 @@ All project documentation lives here. Choose the guide for the task:
 | [Generated modules](generated-modules.md) | Create and customize a module |
 | [Module reference](module-reference.md) | Controller metadata and frontend extension hooks |
 | [API reference](api.md) | Endpoints, request parameters, response conventions |
+| [AI chat](ai-chat.md) | Chat endpoint, memory, cost controls, composer |
 | [Profile and navbar](profile-navbar.md) | Image workflows and live navbar updates |
 | [Frontend](frontend.md) | Shared controls, themes, responsive design |
 | [Notifications](notifications.md) | Toastify usage and per-component styling |

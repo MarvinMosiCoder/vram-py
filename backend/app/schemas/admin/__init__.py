@@ -11,6 +11,7 @@ from app.schemas.admin.adm_user_profiles import AdmUserProfilesOut
 from app.schemas.admin.adm_notifications import AdmNotificationsOut
 from app.schemas.admin.adm_announcements import AdmAnnouncementsOut
 from app.schemas.admin.adm_password_history import AdmPasswordHistoryOut
+from app.schemas.admin.chat import ChatRequest, ChatMessage, ChatConversationsOut
 
 __all__ = [
     "UserCreate",
@@ -24,5 +25,8 @@ __all__ = [
     "AdmUserProfilesOut",
     "AdmNotificationsOut",
     "AdmAnnouncementsOut",
-    "AdmPasswordHistoryOut"
+    "AdmPasswordHistoryOut",
+    "ChatRequest",
+    "ChatMessage",
+    "ChatConversationsOut",
 ]

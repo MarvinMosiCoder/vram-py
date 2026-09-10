@@ -34,3 +34,8 @@ alongside status colors. The navbar has mobile-specific layout rules and the
 sidebar becomes an overlay; avoid clipping either with new fixed-width content.
 
 For notification colors, see [response notifications](notifications.md).
+
+## Chat composer
+
+The chat composer, its settings selector, and its theme usage are documented
+in the [AI chat](ai-chat.md) guide.

@@ -79,3 +79,8 @@ FastAPI errors use `detail` (string, validation array, or field dictionary).
 Some handlers use `errors` or `message`. Normalize these for toasts while retaining
 field errors. For file requests, decode JSON Blob errors before displaying them.
 See [notifications](notifications.md) for rendering conventions.
+
+## Chat
+
+`POST /chat` and the `GET /chat/conversations` endpoints, with their request and
+response fields, are documented in the [AI chat](ai-chat.md) guide.

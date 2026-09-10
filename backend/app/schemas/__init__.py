@@ -16,6 +16,9 @@ from app.schemas.admin import (
     AdmAnnouncementsOut,
     AdmUserProfilesOut,
     AdmAnnouncementsOut,
+    ChatMessage,
+    ChatRequest,
+    ChatConversationsOut,
 )
 
 __all__ = [
@@ -24,9 +27,12 @@ __all__ = [
     "UserOut",
     "Token",
     "ModuleOut",
-    "MenuOut"
+    "MenuOut",
     "AdmNotificationsOut",
     "AdmAnnouncementsOut",
     "AdmUserProfilesOut",
     "AdmAnnouncementsOut",
+    "ChatMessage",
+    "ChatRequest",
+    "ChatConversationsOut",
 ]
