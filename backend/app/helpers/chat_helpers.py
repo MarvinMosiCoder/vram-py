@@ -180,20 +180,6 @@ def build_reply_prompt(
     {message}
     """
 
-
-def build_chat_response(
-    summary: str, history: list[schemas.ChatMessage], message: str, reply: str
-) -> dict:
-    """Return the reply and updated memory to React."""
-    return {
-        "reply": reply,
-        "summary": summary,
-        "history": [item.model_dump() for item in history] + [
-            {"role": "user", "content": message},
-            {"role": "assistant", "content": reply},
-        ],
-    }
-
 def cache_key(prompt: str, model: str, max_tokens: int) -> str:
     """Hash everything that changes the reply, so settings never share an entry."""
     raw = f"{model}\n{max_tokens}\n{prompt}"

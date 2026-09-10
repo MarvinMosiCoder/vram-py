@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.helpers.chat_helpers import (
     RESPONSE_TOKEN_LIMITS,
-    build_chat_response,
     build_reply_prompt,
     check_chat_rate_limit,
     summarize_if_needed,

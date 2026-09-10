@@ -4,24 +4,25 @@
 - [x] Core syntax (indentation, f-strings, no semicolons)
 - [x] Data structures (lists, dicts, tuples) — via chatbot.py practice
 - [x] Functions, `try/except`, `if __name__ == "__main__"`
-- [ ] List comprehensions (practice on your own)
-- [ ] Classes/OOP basics
-- [ ] Virtual environments (`venv`) — you've used `.env` files, but not yet `venv` for dependency isolation
+- [x] List comprehensions — used throughout `chat_helpers.py`
+- [x] Classes/OOP basics — SQLAlchemy models, Pydantic schemas, `@dataclass ModelReply`
+- [x] Virtual environments (`venv`) — `backend/venv`
 
 ## 2. Calling LLM APIs
 - [x] Basic API call (fake stub, then real via Gemini)
 - [x] Understand tokens vs. cost, free tier limits
 - [x] Environment variables / `.env` for API keys
-- [ ] Multi-turn conversation memory (Gemini version doesn't remember history yet — flagged, not built)
-- [ ] System prompts / prompt engineering basics
-- [ ] Error handling & retries for API calls (rate limits, timeouts)
+- [x] Multi-turn conversation memory — rolling summary plus a recent window, stored server-side
+- [ ] System prompts / prompt engineering basics — templated prompts and the "data, not
+      instructions" guard are in; the SDK's `system_instruction` is still unused
+- [x] Error handling & retries for API calls — exponential backoff with jitter on 429 and 5xx
 
 ## 3. Web App Structure (AI Engineer track)
 - [x] FastAPI backend basics (`@app.post`, Pydantic models)
 - [x] CORS (why browsers block cross-origin requests)
 - [x] React frontend basics (`useState`, `fetch`, event handlers)
 - [x] Browser ↔ backend ↔ API request flow
-- [ ] Real React project setup (Vite/CRA) — current frontend uses CDN React, not a real build
+- [x] Real React project setup — Vite
 
 ## 4. RAG (Retrieval-Augmented Generation)
 - [ ] Feed a document (PDF/text) to the AI
@@ -47,23 +48,47 @@
 - [ ] Understand training loops, gradients, overfitting
 
 ## 8. Applying to Your Own Projects
-- [ ] Vram Admin Template — RBAC admin, FastAPI + React (in progress, separate learning track)
+- [ ] Vram Admin Template — RBAC admin, FastAPI + React (in progress; AI chat feature shipped)
 - [ ] CardMarket PH — buy/sell marketplace app (planned, not yet started)
-- [ ] Consider: could either project use an AI feature? (e.g., AI-assisted card search/description in CardMarket PH)
+- [x] Consider: could either project use an AI feature? — Vram's AI chat
 
 ---
-**Legend:** `[x]` = done together in this conversation · `[ ]` = not yet covered
+**Legend:** `[x]` = done · `[ ]` = not yet covered
 
+The shipped cost-control work (Flash-only models, message length cap, summarization,
+recent-window trim, submission locking, per-user rate limiting, output token cap,
+response cache, exponential backoff, database-backed summaries) is documented in
+`docs/vram/ai-chat.md`.
 
-Todo Lists
-Use a cheaper/faster model for normal chat, such as a Flash variant.
-Limit message length before sending.
-Summarize old conversation history instead of resending every message.
-Keep only the last few messages in context.
-Add frontend debounce/submission locking to prevent duplicate requests.
-Add backend per-user rate limiting, for example 10 requests per minute.
-Set a maximum output token limit if supported by the SDK.
-Cache identical prompts and common responses.
-Use exponential backoff for 429 responses.
-Track usage and costs through the Gemini API dashboard.
-Store a conversation summary in the database rather than the entire transcript.
+---
+
+## Todo — remaining
+
+**Measure before tuning**
+- Log `usage_metadata` per call (`prompt_token_count`, `candidates_token_count`,
+  `total_token_count`) so cost is measured instead of estimated. Cache hits produce
+  no log line, which is how the hit rate becomes visible.
+- Check those numbers against the Gemini API dashboard for billing ground truth.
+
+**Cost**
+- Widen the summarization gap. It currently cycles 8 → 10 → 12 → 8 messages, so the
+  extra summary call fires every third turn. `SUMMARIZE_AFTER_MESSAGES = 20` would
+  make it every seventh, trading more verbatim history per request.
+- Use `system_instruction` for the assistant's persona instead of prefixing it onto
+  every prompt.
+
+**Experience**
+- Stream replies with `generate_content_stream` and a `StreamingResponse`, then drop
+  the simulated typing reveal. Needs the stream accumulated server-side so the cache
+  and `save_conversation` still see one complete reply.
+- Rename and delete conversations. The kebab is a `<span>` inside the row `<button>`,
+  so it has to move outside before it can be a real button.
+- Attachments — the `+` control is a disabled placeholder.
+
+**Before more than one worker**
+- Move the rate limiter and response cache to Redis. Both are per process today, so
+  each worker counts and caches separately.
+
+**Cleanup**
+- Delete the unused `build_chat_response` function and its import in `chat.py`.
+- Code-split the chat page; the bundle grew to 632 kB after react-markdown.
