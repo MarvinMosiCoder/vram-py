@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 from functools import partial
+from math import ceil
 from random import uniform
 from time import sleep
 
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.core.auth import get_current_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.helpers.chat_helpers import (
     RESPONSE_TOKEN_LIMITS,
@@ -24,11 +26,32 @@ from app.helpers.chat_helpers import (
     save_conversation,
     summarize_if_needed,
 )
+from app.helpers.fake_api import fake_agent_call
+from app.helpers.gemini_errors import quota_refusal
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-client = genai.Client()
+
+_client = None
+
+
+def _get_client() -> genai.Client:
+    """Build the Gemini client on first use rather than at import.
+
+    ``genai.Client()`` raises when ``GEMINI_API_KEY`` is absent, so building it
+    at module level made the entire admin API fail to boot without a key - the
+    situation stub mode exists for. Resolved once and reused, in the same shape
+    as ``get_redis``. Two threads racing here only build a second client and
+    throw it away, so no lock is needed.
+    """
+    global _client
+
+    if _client is None:
+        _client = genai.Client()
+
+    return _client
+
 
 router = APIRouter(tags=["chat"])
 
@@ -37,23 +60,27 @@ RETRY_BASE_DELAY = 1.0
 RETRY_MAX_DELAY = 8.0
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 
+
 def call_agent(
     prompt: str, model: str, max_output_tokens: int, purpose: str = "reply"
 ) -> ModelReply:
     """Send one prompt to the model and record what it cost.
 
-    **This is the only provider-specific function in the chat stack.** Every
-    layer above it is neutral, so swapping providers means rewriting this body
-    and nothing else. The Gemini coupling lives here: ``genai.Client``,
-    ``types.GenerateContentConfig``, ``types.FinishReason``, and the
-    ``usage_metadata`` field names.
+    **This is the provider-specific function in the chat stack**, together
+    with ``_get_client`` that builds its client and ``helpers/gemini_errors.py``
+    that reads its failures. Every layer above is neutral, so swapping providers
+    means rewriting those and nothing else. The Gemini coupling lives here:
+    ``genai.Client``, ``types.GenerateContentConfig``,
+    ``types.FinishReason``, and the ``usage_metadata`` field names.
 
     ``purpose`` only labels the log line - "reply" or "summary" - so the two
     kinds of call can be told apart when reading token usage. This is also the
     only function that reaches the API, which is what makes a missing log line a
     reliable signal that the response cache served the request instead.
+    ``fake_api.fake_agent_call`` logs the same line marked ``stub=1``, so a
+    stub reply can never be mistaken for a billed one.
     """
-    response = client.models.generate_content(
+    response = _get_client().models.generate_content(
         model=model,
         contents=prompt,
         config=types.GenerateContentConfig(
@@ -84,21 +111,66 @@ def call_agent(
     )
 
 
+# Chosen once, at the innermost layer on purpose: every layer above - cache,
+# retry, backoff, error conversion - stays in the path in stub mode.
+_agent_call = fake_agent_call if settings.CHAT_FAKE else call_agent
+
+
 def call_agent_with_retry(
     prompt: str, model: str, max_output_tokens: int, purpose: str = "reply"
 ) -> ModelReply:
     """Retry throttled or transient model failures with exponential backoff.
 
     ``errors.APIError`` is Gemini's exception type; a different provider
-    would need its own here alongside a new ``call_agent``.
+    would need its own here alongside a new ``call_agent``. ``fake_api`` raises
+    it too, so a `/fail 503` message drives this loop - a `/fail 400` the
+    conversion below, and a `/fail 429 daily` the refusal - without spending
+    quota.
+
+    Not every 429 is a throttle worth waiting out: ``quota_refusal`` separates
+    the per-minute kind, which clears inside ``RETRY_MAX_DELAY``, from a quota
+    that cannot clear before the retries run out.
     """
     last_error = None
 
     for attempt in range(RETRY_ATTEMPTS):
         try:
-            return call_agent(prompt, model, max_output_tokens, purpose)
+            return _agent_call(prompt, model, max_output_tokens, purpose)
         except errors.APIError as error:
             last_error = error
+
+            if error.code == 429:
+                refusal = quota_refusal(error, RETRY_MAX_DELAY)
+
+                if refusal is not None:
+                    wait, daily = refusal
+
+                    # An exhausted daily quota cannot succeed before it resets,
+                    # so sleeping through the backoff only delays the same
+                    # failure by ~4.5s and then reports it as "try again
+                    # shortly". Refuse it now, and say what actually happened.
+                    logger.error(
+                        "agent call=%s model=%s quota exhausted wait=%ss: %s",
+                        purpose,
+                        model,
+                        ceil(wait),
+                        error.message,
+                    )
+
+                    minutes = ceil(wait / 60)
+
+                    raise HTTPException(
+                        status_code=429,
+                        detail=(
+                            "The daily AI quota has run out. Chat will work "
+                            "again once the quota resets."
+                            if daily
+                            else "The assistant is out of quota for about "
+                            f"{minutes} more minute{'' if minutes == 1 else 's'}. "
+                            "Please try again later."
+                        ),
+                        headers={"Retry-After": str(ceil(wait))},
+                    ) from error
 
             if error.code not in RETRY_STATUS_CODES:
                 # Deterministic failures - a retired model id is a 404, a
@@ -135,7 +207,8 @@ def call_agent_with_retry(
 
 
 # The two entry points the route uses. Both share one cache, and each stacks the
-# same layers: cache, then retry, then the model. They differ only in the label
+# same layers: cache, then retry, then the model - or the stub, when
+# CHAT_FAKE is set. They differ only in the label
 # the token log records.
 def reply_call(prompt: str, model: str, max_output_tokens: int) -> ModelReply:
     return call_with_cache(prompt, model, max_output_tokens, call_agent_with_retry)

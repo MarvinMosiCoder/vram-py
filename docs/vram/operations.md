@@ -33,6 +33,13 @@ npm install
 npm run dev
 ```
 
+`GEMINI_API_KEY` is needed only by [AI chat](ai-chat.md). The client is built on
+first use, so the backend starts without it and the first chat request fails
+instead; the rest of the admin is unaffected. `CHAT_FAKE=1` answers chat from a
+canned stub that reaches no provider and needs no key - a development setting
+for working on the chat stack without spending the free tier's 20 daily
+requests, never for judging a reply. See [stub mode](ai-chat.md#stub-mode).
+
 `REDIS_URL` is optional and only needed before running more than one worker; see
 [AI chat](ai-chat.md#shared-state-redis). Windows has no native Redis server -
 use Docker, WSL, or a hosted instance. Left unset, the chat rate limiter and

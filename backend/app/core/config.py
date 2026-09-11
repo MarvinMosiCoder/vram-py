@@ -13,5 +13,10 @@ class Settings(BaseSettings):
     # process memory, which is correct for a single worker. Set it before
     # running more than one worker, or each worker counts and caches alone.
     REDIS_URL: str | None = None
+    # Development only. Set CHAT_FAKE=1 to answer chat from a canned stub
+    # instead of calling Gemini - the free tier allows 20 requests a day, which
+    # one agent task can spend in a single run. See
+    # docs/vram/ai-chat.md#stub-mode.
+    CHAT_FAKE: bool = False
 
 settings = Settings()

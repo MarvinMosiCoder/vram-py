@@ -4,6 +4,31 @@
 
 ### Added
 
+- Added stub mode for chat development. `CHAT_FAKE=1` binds
+  `helpers/fake_api.fake_agent_call` in place of `call_agent`, so replies are
+  canned and no request reaches the provider, while conversation storage,
+  summarization, the rate limiter, the response cache, the retry loop and the
+  error conversion all stay in the path. `/long` and `/fail [code] [daily]`
+  markers reach the truncation and error branches; stub calls log `stub=1` and
+  a warning fires while the setting is on. Defaults to false. The Gemini client
+  is now built on first use rather than at import, so a missing `GEMINI_API_KEY`
+  fails the first chat request instead of stopping the whole admin API from
+  starting - which stub mode would otherwise have been unable to avoid. See
+  [AI chat](ai-chat.md#stub-mode).
+
+- Split the chat retry path by which 429 it received. A Gemini 429 carries
+  `google.rpc` details, and `quota_refusal` now reads `RetryInfo.retryDelay`
+  and `QuotaFailure.violations[].quotaId`: a throttle that clears inside the
+  backoff budget is retried as before, while one whose retry hint exceeds
+  `RETRY_MAX_DELAY` - an exhausted daily quota - is returned immediately as a
+  429 with that delay as `Retry-After`, rather than sleeping ~4.5 seconds
+  through three certain failures and reporting "try again shortly". `quotaId`
+  picks the wording only. Stub mode gained `/fail 429 daily` so both branches
+  are reachable without spending quota. The reading of a Gemini error body now
+  lives in `helpers/gemini_errors.py` and stub mode in `helpers/fake_api.py`,
+  leaving `api/admin/chat.py` to the real provider call and the routes. See
+  [AI chat](ai-chat.md#retry-and-backoff).
+
 - Added optional Redis backing for the chat rate limiter and response cache via
   `REDIS_URL`. Unset, both stay in process memory exactly as before. Set, the
   limiter runs as an atomic Lua sliding window shared by every worker and the
@@ -39,6 +64,14 @@
   operations, and change-process guides.
 
 ### Changed
+
+- Raised `SUMMARIZE_AFTER_MESSAGES` from 12 to 20. The stored window now cycles
+  between 8 and 20 messages instead of 8 and 12, so the second model call a
+  summarizing turn costs falls on every seventh turn rather than every third -
+  roughly 15 to 17.5 turns a day against the free tier's 20-request cap.
+  `KEEP_RECENT_MESSAGES` is unchanged at 6, so a summarizing turn still folds
+  everything older than the last six messages. See
+  [AI chat](ai-chat.md#conversation-memory).
 
 - Lazy-loaded the chat route in `App.jsx` with `React.lazy` and `Suspense`, so
   react-markdown ships in its own chunk. The main bundle dropped from 639 kB to

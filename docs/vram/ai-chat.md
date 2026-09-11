@@ -10,6 +10,8 @@ here rather than repeating any of it.
 | --- | --- |
 | `backend/app/api/admin/chat.py` | Routes, Gemini client, `call_agent`, retry with backoff |
 | `backend/app/helpers/chat_helpers.py` | Conversation storage, rate limit, prompts, summarization, response cache |
+| `backend/app/helpers/gemini_errors.py` | Reads the `google.rpc` details off a failed call; decides whether a 429 can be retried |
+| `backend/app/helpers/fake_api.py` | Stub provider for `CHAT_FAKE=1`; reaches no API. See [stub mode](#stub-mode) |
 | `backend/app/core/redis_client.py` | Optional shared Redis client for the limiter and cache |
 | `backend/app/models/admin/chat_conversations.py` | The `chat_conversations` table |
 | `backend/app/schemas/admin/chat.py` | `ChatRequest`, `ChatMessage`, `ChatConversationsOut` |
@@ -70,7 +72,7 @@ One row per conversation in `chat_conversations`:
 | `pinned` | `Boolean`, not null, defaults false; sorts above everything else |
 
 There is deliberately no per-message table. A row holds a summary plus at most
-a dozen messages no matter how long the conversation runs, so storage stays
+twenty messages no matter how long the conversation runs, so storage stays
 bounded.
 
 **Every read and write filters on `adm_user_id` in the same `.filter()` as the
@@ -85,7 +87,7 @@ unaware and the commit would write nothing.
 ## Conversation memory
 
 `summarize_if_needed` passes history through below `SUMMARIZE_AFTER_MESSAGES`
-(12). At or above it, everything older than the last `KEEP_RECENT_MESSAGES` (6)
+(20). At or above it, everything older than the last `KEEP_RECENT_MESSAGES` (6)
 is folded into the summary and the recent six are kept verbatim. The
 summarization call is pinned to `gemini-3.6-flash` at 1,024 tokens regardless of
 the user's selection, so summarizing does not get more expensive when someone
@@ -96,9 +98,11 @@ it.
 `save_conversation` stores exactly what the summarizer returned plus the new
 exchange, and **must not apply its own trim**. Capping storage at
 `KEEP_RECENT_MESSAGES` looks like the obvious way to bound the row and would
-silently disable summarization, because history would never reach 12. The bound
-already exists: history grows 2, 4, 6 ... 12, the summarizer collapses it back
-to 6, and the row settles between 8 and 12 messages.
+silently disable summarization, because history would never reach 20. The bound
+already exists: history grows 2, 4, 6 ... 20, the summarizer collapses it back
+to 6, and the row settles between 8 and 20 messages - so the extra summary call
+falls on every seventh turn rather than every third, which is what the threshold
+buys on a 20-request daily cap.
 
 `build_reply_prompt` combines the summary, the recent messages, and the newest
 message. Both prompts tell the model to treat prior conversation as data rather
@@ -113,7 +117,9 @@ the only guard against a stored message steering later turns.
 | Output cap | `RESPONSE_TOKEN_LIMITS` | short 512, medium 1,024, long 2,048 tokens |
 | Rate limit | `check_chat_rate_limit` | 10 requests per 60 seconds per user |
 | Response cache | `call_with_cache` | Repeat prompts skip the model entirely |
+| Stub mode | `CHAT_FAKE=1` | Development answers cost nothing; see [stub mode](#stub-mode) |
 | Retry ceiling | `RETRY_ATTEMPTS` | Bounds wasted calls against a throttled quota |
+| Quota refusal | `quota_refusal` | A 429 that cannot clear in time is not retried at all |
 | Summarization | `summarize_if_needed` | Caps how much history is resent |
 
 The client sends the word `short`/`medium`/`long`; the server maps it to a token
@@ -187,11 +193,83 @@ conversation currently open calls `startNewChat`. `MAX_TITLE_LENGTH` is 80 in
 both the schema and `Chat.jsx`, and `save_conversation` truncates first-message
 titles to the same constant.
 
+## Stub mode
+
+`CHAT_FAKE=1` answers chat from a canned stub and reaches no provider. It is a
+development setting, not a feature: the free tier allows 20 requests a day, and
+one agent task can spend all of them in a single run, so working on anything
+above the model call has to be possible without spending quota.
+
+The swap happens at the innermost layer - `_agent_call` binds
+`fake_api.fake_agent_call` instead of `call_agent` - so **everything above it
+stays in the path**: the conversation is stored, summarization fires on
+schedule, the rate limiter counts the request, the response cache stores the
+reply under the key a live call would have used, and the retry loop, backoff and
+error conversion all run. What is fake is the reply text and the token counts,
+which are estimated at four characters per token.
+
+The stub imitates the parts of a real call that the layers above it read,
+because a stub returning zeros makes development look healthy while hiding bugs.
+The output cap is applied to every stub reply, so `truncated` is reached the
+same way it is in production; a latency is slept, because an instant reply hides
+the submission lock and the typing indicator; and the token log line is emitted
+with `stub=1` appended, so a stub reply can never be mistaken for a billed one.
+
+Markers in the message change what the stub does:
+
+| Marker | Effect |
+| --- | --- |
+| `/long` | Pads the reply past the token cap, so the truncation notice appears |
+| `/fail` | Raises a 503 - retryable, so the backoff runs |
+| `/fail 400` | Raises a non-retryable error, converted to a 502 |
+| `/fail 429` | A per-minute throttle, retried |
+| `/fail 429 daily` | An exhausted daily quota, refused immediately |
+
+Set it in `backend/.env` (`CHAT_FAKE=1`; the key is listed in `.env.example` and
+defaults to false). No `GEMINI_API_KEY` is needed while it is on: the Gemini
+client is built on first use by `_get_client` rather than at import, because
+`genai.Client()` raises without a key and building it at module level made the
+whole admin API fail to boot in exactly the situation stub mode exists for. That
+holds outside stub mode too - a missing key now fails the first chat request
+instead of the server's start, so the rest of the admin runs without one.
+
+`fake_api` logs a warning at import whenever stub mode is on, so a forgotten
+stub cannot quietly look like a working assistant - **do not judge a reply's
+quality while it is set.**
+
 ## Retry and backoff
 
-Two different 429s exist here and only one is retried. `check_chat_rate_limit`
-returning 429 to the browser is the client's to wait out; a 429 from Gemini
-means the quota is throttling us, and `call_agent_with_retry` handles it.
+Three different 429s exist here and only one of them is retried.
+
+| 429 | Raised by | Handling |
+| --- | --- | --- |
+| This app's own per-user limit | `check_chat_rate_limit` | Returned to the browser to wait out; no model call is made |
+| A provider throttle that clears in seconds | Gemini, retried by `call_agent_with_retry` | Backed off and retried |
+| A quota that cannot clear in time | Gemini, refused by `quota_refusal` | Returned immediately as 429 with the real `Retry-After` |
+
+The third case is the reason a 429 is not simply retried. A Gemini 429 carries
+`google.rpc` detail objects, and `quota_refusal` reads two of them:
+`RetryInfo.retryDelay` (a protobuf Duration serialized as a string - `"27s"`)
+and `QuotaFailure.violations[].quotaId`, whose `PerDay`/`PerMinute` substring
+names the window that was exhausted.
+
+A per-minute throttle clears inside the backoff budget, so it is retried. A
+daily quota cannot: retrying spends the full ~4.5 seconds on three calls that
+are all certain to fail and then tells the user to "try again shortly", which is
+wrong. The decision rests on the `RetryInfo` comparison rather than the
+`quotaId` spelling - **any 429 whose own retry hint exceeds `RETRY_MAX_DELAY` is
+not retryable here**, whatever the quota is called - while `quotaId` only picks
+the wording, since "the daily quota has run out" must not be said about some
+other limit. Both details are optional; a 429 carrying neither falls through to
+the retry path.
+
+Those readers live in `gemini_errors.py`, not in `chat.py` or
+`chat_helpers.py`: reading a Gemini-shaped error body is as provider-specific as
+making the call, so it sits beside `call_agent` in responsibility while keeping
+the route module to routing and `chat_helpers.py` provider-neutral. The retry
+budget stays with the retry loop - `call_agent_with_retry` passes
+`RETRY_MAX_DELAY` in as `quota_refusal(error, budget_seconds)` - so tuning the
+backoff never means editing the parser.
 
 `RETRY_STATUS_CODES` covers 429 plus transient 5xx. Anything else - a retired
 model id is a 404, a malformed request a 400 - fails immediately, because
@@ -205,6 +283,12 @@ hides the actual cause. Delays double from
 0.5-1.5 factor so that simultaneously throttled requests do not retry in
 lockstep and collide again. Once attempts are exhausted the route raises 503
 with a message the composer can display.
+
+[Stub mode](#stub-mode) raises `errors.APIError` with a body shaped like the
+provider's own, so both 429 branches are reachable without spending quota:
+`/fail 429` injects a per-minute throttle that is retried, and `/fail 429 daily`
+an exhausted daily quota that is refused immediately. Use the elapsed time to
+tell them apart - the refusal does not sleep.
 
 The endpoint is `def`, not `async def`, so it runs in a threadpool and `sleep`
 blocks a worker thread. Worst case with the current constants is roughly 4.5
@@ -314,7 +398,7 @@ limit cut the reply short.
 
 ## Known gaps
 
-- Loading a conversation restores only the stored window, at most about a dozen
+- Loading a conversation restores only the stored window, at most twenty
   messages. Older turns exist only inside the summary.
 - Attachments are not implemented.
 - Replies are not streamed; the whole answer is generated before anything is

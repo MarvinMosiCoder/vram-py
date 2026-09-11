@@ -38,6 +38,8 @@ RESPONSE_TOKEN_LIMITS = {
     "long": 2048,
 }
 
+LATEST_MESSAGE_MARKER = "LATEST USER MESSAGE:"
+
 CACHE_MAX_ENTRIES = 256
 CACHE_TTL_SECONDS = 3600
 
@@ -264,9 +266,22 @@ def build_reply_prompt(
     RECENT MESSAGES:
     {format_history(history)}
 
-    LATEST USER MESSAGE:
+    {LATEST_MESSAGE_MARKER}
     {message}
     """
+
+def latest_message_from_prompt(prompt: str) -> str:
+    """Read back the message `build_reply_prompt` embedded.
+
+    Only stub mode needs this: the fake agent is handed the assembled prompt,
+    not the request, and it echoes the message so replies in development are
+    distinguishable from one another. A summary prompt carries no marker and
+    yields an empty string.
+    """
+    _, marker, tail = prompt.partition(LATEST_MESSAGE_MARKER)
+
+    return tail.strip() if marker else ""
+
 
 def cache_key(prompt: str, model: str, max_tokens: int) -> str:
     """Hash everything that changes the reply, so settings never share an entry."""

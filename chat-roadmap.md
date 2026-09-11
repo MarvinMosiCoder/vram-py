@@ -25,7 +25,9 @@ weakest exactly where agents need strength (reliable tool calls over many turns)
 - [ ] System prompts / prompt engineering basics — templated prompts and the "data, not
       instructions" guard are in; the SDK's `system_instruction` is still unused
 - [x] Error handling & retries for API calls — exponential backoff with jitter on 429
-      and 5xx; non-retryable errors return 502 with the provider's message
+      and 5xx; non-retryable errors return 502 with the provider's message, and a
+      429 whose own `RetryInfo` outlasts the backoff budget is refused rather than
+      retried
 
 ## 3. Web App Structure (AI Engineer track)
 - [x] FastAPI backend basics (`@app.post`, Pydantic models)
@@ -69,22 +71,14 @@ weakest exactly where agents need strength (reliable tool calls over many turns)
 Everything shipped on the chat feature is documented in `docs/vram/ai-chat.md`:
 Flash-only models, message length cap, summarization, recent-window trim,
 submission locking, per-user rate limiting, output token cap, response cache,
-exponential backoff, database-backed summaries, per-call token logging,
-conversation rename/pin/archive/delete, and optional Redis-backed shared state.
+exponential backoff with an immediate refusal for a quota that cannot clear,
+database-backed summaries, per-call token logging, conversation
+rename/pin/archive/delete, optional Redis-backed shared state, and a stub
+provider for development.
 
 ---
 
 ## Todo
-
-### Next up — unblocks agent work
-- [ ] **Stub mode for development.** `CHAT_FAKE=1` makes `call_agent` return canned
-      text instead of calling the API. The free tier allows 20 requests per day and
-      an agent task can make 40 calls, so this is a prerequisite for section 5, not
-      a nicety.
-- [ ] **Split the 429 retry.** An RPM throttle clears in seconds and should retry; a
-      daily-quota 429 cannot succeed until reset, so retrying stalls the request
-      ~4.5s and returns "try again shortly", which is wrong. Read `RetryInfo` on the
-      error and surface "daily limit reached" instead.
 
 ### Section 5 — Agents / Tool Use
 - [ ] One tool, one round trip, no loop. Define a function, pass it to
@@ -98,12 +92,6 @@ conversation rename/pin/archive/delete, and optional Redis-backed shared state.
       section 2 is already in place to measure it.
 
 ### Cost
-- [ ] **`SUMMARIZE_AFTER_MESSAGES = 20`.** Currently cycles 8 → 10 → 12, so the extra
-      summary call fires every third turn; 20 makes it every seventh. On the free
-      tier this is a request-budget win (~15 → ~17.5 turns/day). On tokens it depends
-      on `M`, the average tokens per stored message: break-even is ~80 tokens, since
-      output costs 5× input. Read `M` off the logs — `in=` grows by about `2M` per
-      pass-through turn.
 - [ ] **`system_instruction` for the persona.** Note it will *not* cut tokens — it is
       sent every request and counted in `prompt_token_count`. The real win is
       separating instructions from data, which hardens the "data, not instructions"
@@ -133,6 +121,29 @@ conversation rename/pin/archive/delete, and optional Redis-backed shared state.
 
 ## Done
 
+- **`SUMMARIZE_AFTER_MESSAGES` 12 → 20** — the stored window now cycles 8 → 20
+  instead of 8 → 12, so the extra summary call falls on every seventh turn
+  rather than every third: ~15 → ~17.5 turns a day against the 20-request cap.
+  The token side still depends on `M`, the average tokens per stored message
+  (break-even ~80, since output costs 5× input) — read it off the logs, where
+  `in=` grows by about `2M` per pass-through turn.
+- **Stub mode for development** — `CHAT_FAKE=1` binds `fake_api.fake_agent_call`
+  in place of `call_agent`, so a turn costs no quota while storage,
+  summarization, the rate limiter, the cache, the retry loop and the error paths
+  all still run. `/long` and `/fail [code] [daily]` drive truncation and every
+  error branch. The token log marks stub calls `stub=1` and a warning fires at
+  import, so a stub reply cannot be mistaken for a real one. The Gemini client
+  moved to first-use construction so the backend starts with no API key at all.
+  This was the prerequisite for section 5: 20 requests a day does not cover an
+  agent loop.
+- **Split the 429 retry** — `quota_refusal` reads `RetryInfo.retryDelay` and
+  `QuotaFailure.violations[].quotaId` off the error. A per-minute throttle still
+  backs off and retries; a 429 whose own retry hint is longer than
+  `RETRY_MAX_DELAY` is refused immediately as a 429 carrying that delay as
+  `Retry-After`, instead of stalling ~4.5s to report "try again shortly". The
+  `quotaId` window only picks the wording, so "the daily quota has run out" is
+  never said about a different limit. `/fail 429` and `/fail 429 daily` reach
+  both branches in stub mode.
 - **Per-call token logging** — `call_agent` logs `in=`/`out=`/`total=` labelled
   `reply` or `summary`. A cache hit makes no call and so logs nothing, which is how
   the hit rate becomes visible. `POST /chat` also returns the turn's `usage` and the
