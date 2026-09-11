@@ -19,6 +19,7 @@ from app.schemas.admin import (
     ChatMessage,
     ChatRequest,
     ChatConversationsOut,
+    ConversationSettings,
 )
 
 __all__ = [
@@ -35,4 +36,5 @@ __all__ = [
     "ChatMessage",
     "ChatRequest",
     "ChatConversationsOut",
+    "ConversationSettings"
 ]

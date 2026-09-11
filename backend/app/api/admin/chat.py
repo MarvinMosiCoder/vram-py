@@ -1,64 +1,124 @@
-from dotenv import load_dotenv
+import logging
+from datetime import datetime
+from functools import partial
 from random import uniform
 from time import sleep
+
+from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException
 from google import genai
-from google.genai import types, errors
-from app import schemas, models
-from app.core.auth import get_current_user
+from google.genai import errors, types
 from sqlalchemy.orm import Session
+
+from app import models, schemas
+from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.helpers.chat_helpers import (
     RESPONSE_TOKEN_LIMITS,
+    ModelReply,
     build_reply_prompt,
+    call_with_cache,
     check_chat_rate_limit,
-    summarize_if_needed,
-    cached_api_call,
+    list_conversations,
     load_conversation,
     save_conversation,
-    list_conversations,
-    ModelReply,
+    summarize_if_needed,
 )
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 client = genai.Client()
 
 router = APIRouter(tags=["chat"])
+
 RETRY_ATTEMPTS = 3
 RETRY_BASE_DELAY = 1.0
 RETRY_MAX_DELAY = 8.0
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 
-def real_api_call(message: str, model: str, response_length: int) -> ModelReply:
+def call_agent(
+    prompt: str, model: str, max_output_tokens: int, purpose: str = "reply"
+) -> ModelReply:
+    """Send one prompt to the model and record what it cost.
+
+    **This is the only provider-specific function in the chat stack.** Every
+    layer above it is neutral, so swapping providers means rewriting this body
+    and nothing else. The Gemini coupling lives here: ``genai.Client``,
+    ``types.GenerateContentConfig``, ``types.FinishReason``, and the
+    ``usage_metadata`` field names.
+
+    ``purpose`` only labels the log line - "reply" or "summary" - so the two
+    kinds of call can be told apart when reading token usage. This is also the
+    only function that reaches the API, which is what makes a missing log line a
+    reliable signal that the response cache served the request instead.
+    """
     response = client.models.generate_content(
         model=model,
-        contents=message,
+        contents=prompt,
         config=types.GenerateContentConfig(
-            max_output_tokens=response_length,
+            max_output_tokens=max_output_tokens,
         ),
     )
 
     candidate = (response.candidates or [None])[0]
+    usage = response.usage_metadata
+
+    logger.info(
+        "agent call=%s model=%s in=%s out=%s total=%s",
+        purpose,
+        model,
+        getattr(usage, "prompt_token_count", None),
+        getattr(usage, "candidates_token_count", None),
+        getattr(usage, "total_token_count", None),
+    )
 
     return ModelReply(
         text=response.text or "",
         truncated=bool(
             candidate and candidate.finish_reason == types.FinishReason.MAX_TOKENS
         ),
+        prompt_tokens=getattr(usage, "prompt_token_count", None),
+        output_tokens=getattr(usage, "candidates_token_count", None),
+        total_tokens=getattr(usage, "total_token_count", None),
     )
 
-def retrying_api_call(prompt: str, model: str, response_length: int) -> ModelReply:
-    """Retry throttled or transient Gemini failures with exponential backoff."""
+
+def call_agent_with_retry(
+    prompt: str, model: str, max_output_tokens: int, purpose: str = "reply"
+) -> ModelReply:
+    """Retry throttled or transient model failures with exponential backoff.
+
+    ``errors.APIError`` is Gemini's exception type; a different provider
+    would need its own here alongside a new ``call_agent``.
+    """
     last_error = None
 
     for attempt in range(RETRY_ATTEMPTS):
         try:
-            return real_api_call(prompt, model, response_length)
+            return call_agent(prompt, model, max_output_tokens, purpose)
         except errors.APIError as error:
             last_error = error
 
             if error.code not in RETRY_STATUS_CODES:
-                raise
+                # Deterministic failures - a retired model id is a 404, a
+                # malformed request a 400 - never succeed on a second attempt.
+                # Raising the raw APIError here escaped the route unhandled and
+                # reached the browser as a bare 500 with no `detail`, so the
+                # composer could only show its generic fallback. Convert it, and
+                # log the provider's own wording for the server side.
+                logger.error(
+                    "agent call=%s model=%s failed code=%s: %s",
+                    purpose,
+                    model,
+                    error.code,
+                    error.message,
+                )
+
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"The assistant rejected the request: {error.message}",
+                ) from error
 
             if attempt == RETRY_ATTEMPTS - 1:
                 break
@@ -74,8 +134,20 @@ def retrying_api_call(prompt: str, model: str, response_length: int) -> ModelRep
     ) from last_error
 
 
-def cached_call(prompt: str, model: str, response_length: int) -> ModelReply:
-    return cached_api_call(prompt, model, response_length, retrying_api_call)
+# The two entry points the route uses. Both share one cache, and each stacks the
+# same layers: cache, then retry, then the model. They differ only in the label
+# the token log records.
+def reply_call(prompt: str, model: str, max_output_tokens: int) -> ModelReply:
+    return call_with_cache(prompt, model, max_output_tokens, call_agent_with_retry)
+
+
+def summary_call(prompt: str, model: str, max_output_tokens: int) -> ModelReply:
+    return call_with_cache(
+        prompt,
+        model,
+        max_output_tokens,
+        partial(call_agent_with_retry, purpose="summary"),
+    )
 
 
 @router.post("/chat")
@@ -84,30 +156,55 @@ def chat(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    logger.info("chat request user=%s", current_user.id)
+
     check_chat_rate_limit(current_user.id)
-    
+
     conversation = load_conversation(db, current_user.id, req.conversation_id)
-    
+
+    # A turn can cost one model call or two, because summarization fires only
+    # once history reaches SUMMARIZE_AFTER_MESSAGES. Collecting every reply here
+    # is what lets the response report the whole turn rather than just the last
+    # call. The list is local to the request: this route is `def`, so FastAPI
+    # runs it in a threadpool and a module-level list would mix users together.
+    model_calls = []
+
+    def recorded_summary_call(prompt, model, max_output_tokens):
+        """Wrap summary_call so its cost is captured; summarize_if_needed
+        decides whether to call it, so there is no return value to read."""
+        result = summary_call(prompt, model, max_output_tokens)
+        model_calls.append(result)
+
+        return result
+
     summary, history = summarize_if_needed(
-        conversation.summary, 
-         [schemas.ChatMessage(**item) for item in conversation.recent_messages],
-        cached_call
+        conversation.summary,
+        [schemas.ChatMessage(**item) for item in conversation.recent_messages],
+        recorded_summary_call,
     )
 
     prompt = build_reply_prompt(summary, history, req.message)
-    
-    reply = cached_call(
-        prompt,
-        req.model,
-        RESPONSE_TOKEN_LIMITS[req.response_length],
-    )
+
+    reply = reply_call(prompt, req.model, RESPONSE_TOKEN_LIMITS[req.response_length])
+    model_calls.append(reply)
 
     save_conversation(db, conversation, summary, history, req.message, reply.text)
+
+    def token_total(field: str) -> int:
+        """Sum one token field across the turn; the counts are optional."""
+        return sum(getattr(call, field) or 0 for call in model_calls)
 
     return {
         "reply": reply.text,
         "conversation_id": conversation.id,
         "truncated": reply.truncated,
+        "usage": {
+            "prompt_tokens": token_total("prompt_tokens"),
+            "output_tokens": token_total("output_tokens"),
+            "total_tokens": token_total("total_tokens"),
+            "calls": len(model_calls),
+            "cached": all(call.cached for call in model_calls),
+        },
     }
 
 
@@ -131,6 +228,48 @@ def conversation_messages(
         "conversation_id": conversation.id,
         "messages": conversation.recent_messages or [],
     }
+
+@router.post("/conversation-settings")
+def conversation_settings(
+    payload: schemas.ConversationSettings,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Apply one rail menu action to one of the caller's conversations.
+
+    `load_conversation` filters on the owner, so another user's id raises 404
+    before any of these branches run.
+    """
+    conversation = load_conversation(db, current_user.id, payload.conversation_id)
+
+    if payload.action == "rename":
+        if not payload.title:
+            raise HTTPException(
+                status_code=422,
+                detail="A title is required to rename a conversation.",
+            )
+
+        conversation.title = payload.title
+        message = "Conversation renamed!"
+
+    elif payload.action == "pin":
+        # A toggle rather than a set, so the one menu entry does both.
+        conversation.pinned = not conversation.pinned
+        message = "Conversation pinned!" if conversation.pinned else "Conversation unpinned!"
+
+    elif payload.action == "archive":
+        conversation.archived_at = datetime.now()
+        message = "Conversation archived!"
+
+    else:
+        db.delete(conversation)
+        db.commit()
+
+        return {"message": "Conversation deleted successfully!", "status": "success"}
+
+    db.commit()
+
+    return {"message": message, "status": "success"}
 
 
 @router.get("/")

@@ -15,9 +15,11 @@ class ChatRequest(BaseModel):
         max_length=MAX_MESSAGE_LENGTH,
     )
     conversation_id: int | None = None
+    # Keep in step with the option list in Chat.jsx: the schema rejects anything
+    # the frontend offers on its own. gemini-2.5-flash was removed because the
+    # API now returns 404 "no longer available to new users" for it.
     model: Literal[
         "gemini-3.6-flash",
-        "gemini-2.5-flash",
     ] = "gemini-3.6-flash"
 
     response_length: Literal["short", "medium", "long"] = "medium"
@@ -31,11 +33,40 @@ class ChatRequest(BaseModel):
 
         return cleaned
 
+MAX_TITLE_LENGTH = 80
+
+
 class ChatConversationsOut(BaseModel):
     """One row in the sidebar list -- deliberately without summary or messages."""
     id: int
     title: str | None = None
     updated_at: datetime | None = None
+    pinned: bool = False
 
     class Config:
         from_attributes = True 
+
+class ConversationSettings(BaseModel):
+    """One menu action from the conversation rail.
+
+    ``conversation_id`` is required on purpose: when it defaulted to ``None``,
+    ``load_conversation`` created a fresh conversation and the endpoint then
+    archived or deleted that new row. ``title`` is only read by ``rename``.
+    """
+
+    conversation_id: int
+    action: Literal["rename", "pin", "archive", "delete"]
+    title: str | None = Field(default=None, max_length=MAX_TITLE_LENGTH)
+
+    @field_validator("title")
+    @classmethod
+    def reject_blank_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        cleaned = value.strip()
+
+        if not cleaned:
+            raise ValueError("Title cannot be blank.")
+
+        return cleaned

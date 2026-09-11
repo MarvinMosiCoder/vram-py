@@ -11,3 +11,4 @@ openpyxl
 pydantic-settings
 google-genai
 python-dotenv
+redis

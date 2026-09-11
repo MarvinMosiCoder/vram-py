@@ -8,11 +8,12 @@ here rather than repeating any of it.
 
 | File | Responsibility |
 | --- | --- |
-| `backend/app/api/admin/chat.py` | Routes, Gemini client, `real_api_call`, retry with backoff |
+| `backend/app/api/admin/chat.py` | Routes, Gemini client, `call_agent`, retry with backoff |
 | `backend/app/helpers/chat_helpers.py` | Conversation storage, rate limit, prompts, summarization, response cache |
+| `backend/app/core/redis_client.py` | Optional shared Redis client for the limiter and cache |
 | `backend/app/models/admin/chat_conversations.py` | The `chat_conversations` table |
 | `backend/app/schemas/admin/chat.py` | `ChatRequest`, `ChatMessage`, `ChatConversationsOut` |
-| `frontend/src/pages/chat/Chat.jsx` | Transcript, conversation rail, composer |
+| `frontend/src/pages/chat/Chat.jsx` | Transcript, conversation rail, composer; lazy-loaded in `App.jsx` |
 | `frontend/src/pages/chat/MarkdownMessage.jsx` | Renders assistant replies as themed markdown |
 
 `chat.router` is registered in `backend/app/api/routers.py` ahead of the dynamic
@@ -25,8 +26,9 @@ All three require an authenticated user and act only on that user's rows.
 | Endpoint | Purpose |
 | --- | --- |
 | `POST /chat` | Send a message, get a reply |
-| `GET /chat/conversations` | The caller's conversations, most recently used first |
+| `GET /chat/conversations` | The caller's conversations, pinned first |
 | `GET /chat/conversations/{id}` | The stored messages of one conversation |
+| `POST /conversation-settings` | Rename, pin, archive, or delete one conversation |
 
 ### `POST /chat`
 
@@ -34,7 +36,7 @@ All three require an authenticated user and act only on that user's rows.
 | --- | --- |
 | `message` | 1-2,000 characters, trimmed; blank rejected by a field validator |
 | `conversation_id` | Existing conversation, or `null` to start one |
-| `model` | `gemini-3.6-flash` (default) or `gemini-2.5-flash` |
+| `model` | `gemini-3.6-flash` only; `gemini-2.5-flash` now 404s as retired |
 | `response_length` | `short`, `medium`, or `long` (default) |
 
 Returns `reply`, `conversation_id`, and `truncated` - the last is true when the
@@ -64,6 +66,8 @@ One row per conversation in `chat_conversations`:
 | `title` | First message, truncated to 80 characters |
 | `summary` | `Text`, not `String(255)` - a 200-word summary exceeds 255 |
 | `recent_messages` | `JSON` list of `{role, content}` |
+| `archived_at` | Set by the archive action; `list_conversations` filters these out |
+| `pinned` | `Boolean`, not null, defaults false; sorts above everything else |
 
 There is deliberately no per-message table. A row holds a summary plus at most
 a dozen messages no matter how long the conversation runs, so storage stays
@@ -108,7 +112,7 @@ the only guard against a stored message steering later turns.
 | Input cap | `MAX_MESSAGE_LENGTH` in schema and `Chat.jsx` | 2,000 characters per message |
 | Output cap | `RESPONSE_TOKEN_LIMITS` | short 512, medium 1,024, long 2,048 tokens |
 | Rate limit | `check_chat_rate_limit` | 10 requests per 60 seconds per user |
-| Response cache | `cached_api_call` | Repeat prompts skip the model entirely |
+| Response cache | `call_with_cache` | Repeat prompts skip the model entirely |
 | Retry ceiling | `RETRY_ATTEMPTS` | Bounds wasted calls against a throttled quota |
 | Summarization | `summarize_if_needed` | Caps how much history is resent |
 
@@ -118,18 +122,85 @@ ceiling.
 
 The rate limiter holds a `deque` of monotonic timestamps per user id behind a
 lock, expires entries older than the window, and raises 429 with a `Retry-After`
-header. It lives in process memory: each worker counts separately and a restart
-clears the counts.
+header. See [shared state](#shared-state-redis) for how it behaves across
+workers.
+
+## Token usage
+
+`call_agent` is the only function that reaches the API - and the only
+provider-specific one in the stack - so it is where usage is recorded. Every successful call logs one line through the stdlib `logging`
+module - `logging.basicConfig` is set at the top of `app/main.py`, above the
+router import, because a log emitted at import time is otherwise dropped by the
+unconfigured root logger:
+
+```
+INFO:app.api.admin.chat:agent call=reply model=gemini-3.6-flash in=1840 out=312 total=2152
+```
+
+`purpose` labels the line `reply` or `summary`, since a turn can make both calls
+and their costs answer different questions. `usage_metadata` and each of its
+fields are optional in the SDK, so they are read with `getattr(..., None)` and
+never used in arithmetic without a fallback.
+
+**A cache hit produces no log line**, because it never reaches `call_agent`.
+Comparing `chat request` lines against `call=reply` lines is how the hit rate
+becomes visible. Only successful calls log: a call that failed and was retried
+logs once, on the attempt that succeeded, so attempts that were billed but
+errored show up as a gap against the Gemini dashboard rather than in the log.
+
+`POST /chat` also returns the turn's usage to the browser:
+
+```json
+"usage": {"prompt_tokens": 1840, "output_tokens": 312, "total_tokens": 2152,
+          "calls": 1, "cached": false}
+```
+
+The route collects every `ModelReply` of the turn in a request-local list, so
+`calls: 2` marks a turn that also summarized. That list must stay local to the
+request - the route is `def`, so it runs in a threadpool and a module-level list
+would mix users together.
+
+`ModelReply` carries the counts, and `ModelReply` is what the cache stores. A
+hit would therefore replay the original call's numbers, which is the opposite of
+the signal above, so `call_with_cache` returns `replace(entry, cached=True)` on
+a hit. `replace` copies, leaving the stored entry correct for the next hit.
+
+## Conversation actions
+
+`POST /conversation-settings` takes `conversation_id`, an `action`, and for
+rename a `title`. `load_conversation` applies the ownership filter, so another
+user's id raises 404 before any branch runs.
+
+| Action | Effect |
+| --- | --- |
+| `rename` | Sets `title`; requires a non-blank title within `MAX_TITLE_LENGTH` |
+| `pin` | Toggles `pinned`, so one menu entry both pins and unpins |
+| `archive` | Stamps `archived_at`; the row stays but leaves the rail |
+| `delete` | Removes the row and its stored messages |
+
+`conversation_id` is required. When it defaulted to `None`, `load_conversation`
+created a fresh conversation and the endpoint archived or deleted that new row.
+
+In the rail, rename opens a `Modal` with a text input, archive and delete go
+through the confirm dialog, and pin applies immediately. Deleting the
+conversation currently open calls `startNewChat`. `MAX_TITLE_LENGTH` is 80 in
+both the schema and `Chat.jsx`, and `save_conversation` truncates first-message
+titles to the same constant.
 
 ## Retry and backoff
 
 Two different 429s exist here and only one is retried. `check_chat_rate_limit`
 returning 429 to the browser is the client's to wait out; a 429 from Gemini
-means the quota is throttling us, and `retrying_api_call` handles it.
+means the quota is throttling us, and `call_agent_with_retry` handles it.
 
-`RETRY_STATUS_CODES` covers 429 plus transient 5xx. Anything else - a bad model
-name is a 400 - re-raises immediately, because retrying a deterministic failure
-only makes the user wait for the same error. Delays double from
+`RETRY_STATUS_CODES` covers 429 plus transient 5xx. Anything else - a retired
+model id is a 404, a malformed request a 400 - fails immediately, because
+retrying a deterministic failure only makes the user wait for the same error.
+Those are converted to a 502 whose `detail` carries the provider's own wording,
+and logged at `ERROR` first. **Do not re-raise the raw `APIError` here.** It
+escapes the route unhandled, FastAPI returns a bare 500 with no `detail`, and
+the composer can only fall back to "The assistant could not respond" - which
+hides the actual cause. Delays double from
 `RETRY_BASE_DELAY`, cap at `RETRY_MAX_DELAY`, and are multiplied by a random
 0.5-1.5 factor so that simultaneously throttled requests do not retry in
 lockstep and collide again. Once attempts are exhausted the route raises 503
@@ -142,9 +213,9 @@ threadpool - keep it low.
 
 ## Response cache
 
-`cached_api_call` wraps `real_api_call` through `retrying_api_call`; the API
-module supplies the `cached_call` adapter so replies and summaries share one
-cache. The layering is **cache, then retry, then Gemini**: a hit never enters
+`call_with_cache` wraps `call_agent` through `call_agent_with_retry`; the API
+module supplies the `reply_call` and `summary_call` adapters so replies and
+summaries share one cache. The layering is **cache, then retry, then Gemini**: a hit never enters
 the retry loop, and an entry is only stored once retries have produced a real
 answer.
 
@@ -168,8 +239,43 @@ inside one conversation, where the growing history changes the prompt every
 turn.
 
 Entries are shared between users, but only byte-identical prompts collide, so no
-private history is exposed. The cache is per process: workers do not share it
-and a restart empties it. Redis is the answer if that stops being acceptable.
+private history is exposed. See [shared state](#shared-state-redis) for the
+Redis-backed alternative.
+
+## Shared state (Redis)
+
+The rate limiter and the response cache are the two pieces of chat state that
+outlive a request, and by default both live in process memory. That is correct
+for one worker. Run two and each keeps its own counts and its own cache, so ten
+requests per minute becomes ten *per worker* and a cached reply only helps the
+worker that produced it.
+
+Setting `REDIS_URL` moves both to Redis. Leaving it unset keeps the in-process
+behaviour, so local development needs no Redis at all - `redis` is imported
+lazily and `app/core/redis_client.py` resolves the client once per process.
+
+| | `REDIS_URL` unset | `REDIS_URL` set |
+| --- | --- | --- |
+| Rate limit window | Per worker, `deque` under a `Lock` | Shared, one ZSET per user |
+| Cache | In-process `OrderedDict` LRU, 256 entries | Redis keys, TTL only |
+| On restart | Both cleared | Both survive |
+
+**The limiter runs as a Lua script.** Separate `ZREMRANGEBYSCORE` / `ZCARD` /
+`ZADD` calls leave a gap where two workers both read a count under the limit and
+both admit a request; a script executes as one Redis operation and cannot. The
+score is wall-clock `time()`, not `monotonic()` - monotonic values are only
+comparable inside one process, and this key is read by all of them.
+
+**The Redis cache has no entry ceiling.** `CACHE_MAX_ENTRIES` bounds the
+in-process `OrderedDict`; in Redis, entries expire after `CACHE_TTL_SECONDS` and
+bounding total memory is Redis's `maxmemory` policy rather than this module's
+job. `cached` is stored false and set when the entry is read back, because it
+describes how *this* response was served, not the stored copy.
+
+**A Redis failure degrades rather than breaks.** An unreachable URL at startup
+logs a warning and falls back to in-process state. A failure mid-request does
+the same per call: an unreadable cache is treated as a miss, and the limiter
+falls back to its per-worker window, which is stricter than no limit at all.
 
 ## Frontend
 
@@ -190,6 +296,12 @@ so any reply length finishes in about 60 ticks. Do not go back to a fixed
 character count: at three characters per tick a long reply took roughly half a
 minute to appear, and re-rendered the transcript on every one of those ticks.
 
+The route is **lazy-loaded**. `App.jsx` imports it through `React.lazy` behind
+a `Suspense` fallback, so react-markdown and its markdown toolchain land in a
+separate chunk that only downloads when someone opens `/chat`. That moved the
+main bundle from 639 kB to 458 kB. Importing `Chat` statically again silently
+undoes it - the warning is a bundle-size number, not a build error.
+
 `MarkdownMessage` maps each markdown element to theme tokens explicitly, because
 this project has no typography plugin (Tailwind v4, configured in `index.css`).
 User messages are not passed through it - they render as plain pre-wrapped text.
@@ -204,8 +316,6 @@ limit cut the reply short.
 
 - Loading a conversation restores only the stored window, at most about a dozen
   messages. Older turns exist only inside the summary.
-- No way to rename or delete a conversation.
-- Rate limit and cache are per process, not shared across workers.
 - Attachments are not implemented.
 - Replies are not streamed; the whole answer is generated before anything is
   sent, so nothing appears until it is complete.

@@ -33,6 +33,11 @@ npm install
 npm run dev
 ```
 
+`REDIS_URL` is optional and only needed before running more than one worker; see
+[AI chat](ai-chat.md#shared-state-redis). Windows has no native Redis server -
+use Docker, WSL, or a hosted instance. Left unset, the chat rate limiter and
+response cache stay in process memory and no Redis is required.
+
 Vite normally serves port 5173; FastAPI serves 8000 and exposes interactive API
 reference at `/docs`. Inspect configuration rather than assuming a deployed
 instance uses the same addresses or credentials.

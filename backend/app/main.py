@@ -1,3 +1,5 @@
+import logging
+logging.basicConfig(level=logging.INFO)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -5,6 +7,7 @@ from app.core.middleware import RequireAuthMiddleware
 from app.api import routers
 
 app = FastAPI(title="Vram Admin API")
+
 
 import json
 from fastapi.responses import JSONResponse

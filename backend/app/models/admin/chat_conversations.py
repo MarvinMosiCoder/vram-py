@@ -1,4 +1,5 @@
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import false as sa_false
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -16,7 +17,10 @@ class ChatConversations(Base):
     recent_messages = Column(JSON, nullable=False, default=list)
     created_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, nullable=True)
-
+    archived_at = Column(DateTime, nullable=True)
+    pinned = Column(
+        Boolean, nullable=False, default=False, server_default=sa_false()
+    )
     user = relationship(
         "User",
         back_populates="chat_conversations",
