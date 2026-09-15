@@ -14,6 +14,42 @@
 Password-reset JSX files remain legacy Inertia components and are not connected
 to the current App routes. Do not present them as a working recovery flow.
 
+## Change password
+
+Open Change Password from the navbar account dropdown, or visit
+`/change-password`. The form takes the current password, a new one, and a
+confirmation, and enables its submit button only once the new password has an
+uppercase letter, a number, a special character, at least 8 characters, and
+matches the confirmation. A strength meter reports Weak/Strong/Excellent beside
+the same rules. All of this is client-side gating of the button; the server
+performs its own checks.
+
+`POST /save-change-password` verifies the current password, then refuses a
+password that appears in `adm_password_history` for that user, then writes the
+new hash along with `last_password_updated` and `waiver_count = 0` - which is
+what clears the [forced change](#forced-password-change). It appends a history
+row afterwards. Note that the row stores the password just set, despite the
+column being named `adm_user_old_pass`: history accumulates every password the
+account has held, which is what makes the reuse check work on later changes.
+A password set at account creation was never recorded, so it can be reused once.
+This matches the Laravel original's `postUpdatePassword`.
+
+Both outcomes return HTTP 200 with `{message, status}` and `status` of
+`success` or `error`, so a failed change is not an HTTP error. The page reads
+`status` rather than the status code.
+
+On success the page shows the message, counts down from three in both the toast
+and an inline banner, then clears the token; `ProtectedRoute` redirects to
+`/login` once the user is null. `components/form/ChangePasswordForm.jsx` and
+`hooks/useSignOutCountdown.js` hold the form and the countdown, shared with the
+forced-change modal - the form reports success to its caller rather than
+deciding what happens next, because the modal must not sign the user out after a
+waiver.
+
+`POST /check-password` still exists and reports whether a supplied password
+matches the caller's current one. Nothing calls it: the forced-change screen
+reads `is_default_password` from the policy instead.
+
 ## Forced password change
 
 After `/me`, AuthContext requests `GET /password-policy` and stores the result.
@@ -83,12 +119,46 @@ Role deletion is disabled in the controller's declared actions.
 
 The admin sidebar reads active, protected `adm_modules` rows from `/admin_sidebar`.
 The frontend displays this section for superadmins. Normal navigation reads
-`/user_sidebar`, filtering active, non-dashboard `adm_menus` rows by the current
-role and sorting value, including one child level.
+`/user_sidebar`, filtering active, non-dashboard `adm_menuses` rows by sorting
+value and including one child level.
+
+Role visibility comes from the `adm_menus_roles` pivot, not from a column on the
+menu row: `/user_sidebar` keeps only menus whose id appears in that table for the
+caller's role. This is Laravel's `adm_menus_privileges`, renamed because
+`privileges` in this port already means the module permission flags in
+`adm_roles_privileges` - a different relationship with a different grain.
+`adm_menuses.id_adm_role` still exists and still holds the pre-pivot value, but
+nothing reads it; it is scheduled for removal once the menu screen is complete.
+
+A menu is top level when `parent_id` is `NULL`. Laravel writes `0` for the same
+thing, so porting that literally empties the sidebar with no error.
 
 A module row enables routing; a menu row places a link in role-specific navigation.
 They are separate concerns. The navbar reads branding through `/system/logo` and `/system/appname`,
 which query settings with fallback values.
+
+## Menu management
+
+`/menus` is a custom page, not a generated module: the screen is a list of menu
+cards with their role assignments, so it declares no `table_fields` and never
+reaches the shared CRUD engine. `MenusController.get_index` returns
+`page_title`, `roles` (`{value, label}` options), `menus` (active top-level rows,
+each with a one-level `children` list and a `roles` list of `{id, name}`), and
+`inactive_menus` (no children). `frontend/src/pages/modules/menus/index.jsx`
+renders it; the file's own path is its registration, through the
+`import.meta.glob` in `modulePages.js`.
+
+Implemented so far is the read only. Create, edit, reorder and delete are not
+written, and the card's pencil button is inert. The Laravel original
+(`MenusController.php` plus `MenuManagement.jsx`) additionally has
+`createMenu`, `updateMenu`, `autoUpdateMenu` drag ordering and `editMenu`.
+
+Its menu type is limited to `Route` and `URL`, matching the current Laravel
+form. `CommonHelpers::sidebarMenu()` also resolves `Module`, `Statistic` and
+`Controller & Method`, which come from the application Laravel was itself ported
+from; this port implements none of them, and `UserSidebar.jsx` does not yet
+branch on type at all - it builds an internal path for every menu, so a `URL`
+menu would not resolve correctly.
 
 ## Availability
 
@@ -96,7 +166,9 @@ which query settings with fallback values.
 | --- | --- |
 | Users and roles | Registered controllers and custom forms |
 | Profile | Implemented API and `/profile` page; see [profile guide](profile-navbar.md) |
-| Menu management | Sidebar reads work; `menus_module.py` is empty, so its seeded controller is not implemented |
+| Change password | Implemented API and `/change-password` page, with history reuse checks |
+| Forced password change | Implemented policy endpoint, waiver endpoint and client gate; the gate is a prompt, not server enforcement |
+| Menu management | Sidebar reads work. `MenusController` implements `get_index` only, and `/menus` renders a read-only list; no create, edit, reorder or delete exists yet |
 | Notifications module | Registered demonstration actions; not a complete inbox or generated CRUD payload |
 | Module generator | Python `generate()` helper exists; no registered ModulesController admin screen |
 | Settings, API generator, email templates, statistics builder, logs | Seeded entries do not imply implemented controllers |

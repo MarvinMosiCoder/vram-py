@@ -18,6 +18,7 @@ from app.models.admin import (
     AdminAnnouncements,
     AdminPasswordHistory,
     ChatConversations,
+    MenusRoles,
 )
 
 __all__ = [
@@ -32,4 +33,5 @@ __all__ = [
     "AdminAnnouncements",
     "AdminPasswordHistory",
     "ChatConversations",
+    "MenusRoles",
 ]

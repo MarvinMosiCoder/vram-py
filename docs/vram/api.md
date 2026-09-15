@@ -26,11 +26,15 @@ configured by `ACCESS_TOKEN_EXPIRE_MINUTES` (default 60). There is no refresh ro
 | GET | `/system/appname` | Public application name setting |
 | GET | `/password-policy` | Authenticated forced-change policy for the caller |
 | POST | `/save-change-password` | Authenticated password change; `{message, status}` |
+| POST | `/check-password` | Authenticated check of a supplied password; currently unused |
 | POST | `/waive-change-password` | Authenticated waiver; refused on default password or at the cap |
 
 Profile endpoint contracts are maintained in [profile and navbar](profile-navbar.md).
 The password-policy fields and the waiver rules are documented in
-[admin processes](admin-processes.md#forced-password-change).
+[admin processes](admin-processes.md#forced-password-change), and the change
+itself in [change password](admin-processes.md#change-password). Both password
+endpoints answer HTTP 200 with a `status` of `success` or `error`, so the body
+decides the outcome rather than the status code.
 Client login/logout behavior and incomplete permission enforcement are documented
 in [admin processes](admin-processes.md), not implied by the access table above.
 

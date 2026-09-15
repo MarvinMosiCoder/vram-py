@@ -4,6 +4,34 @@
 
 ### Added
 
+- Renamed `adm_password_history.updated_by` to `created_at` and retyped it from
+  `Integer` to `DateTime`, so the history row records when a password was set.
+  The rename is hand-written because autogenerate emits a destructive drop/add
+  for one, and the type change passes `postgresql_using`, since PostgreSQL has
+  no implicit cast from integer to timestamp. The model previously declared
+  `updated_at` twice and no `created_at` at all, so `save-change-password`
+  raised `TypeError` when appending a history row. See
+  [migrations](migrations.md#rename-a-column).
+
+- Added the `adm_menus_roles` pivot, so a menu can be granted to several roles
+  instead of the single `adm_menuses.id_adm_role` column. Its migration
+  backfills the existing assignments and adds a unique constraint on
+  `(id_adm_menus, id_adm_role)`, which Laravel lacks - it avoids duplicates by
+  diffing in PHP. `/user_sidebar` now filters on the pivot, matching
+  `CommonHelpers::sidebarMenu()`'s subquery against `adm_menus_privileges`;
+  the table is renamed because `privileges` in this port already means the
+  module permission flags in `adm_roles_privileges`. `id_adm_role` is left in
+  place, unread, until the menu screen is finished. See
+  [admin processes](admin-processes.md#menus-and-branding).
+
+- Implemented `MenusController.get_index` and a read-only `/menus` page listing
+  each active menu as a card with its assigned roles, plus its one level of
+  children. It is a custom page rather than a generated module: the screen has
+  no table, so it declares no `table_fields`. Create, edit, reorder and delete
+  are not implemented; the previous `menus/index.jsx` was a copy of the roles
+  page and rendered `GeneratedModulePage` against columns `adm_menuses` does
+  not have. See [admin processes](admin-processes.md#menu-management).
+
 - Added the forced password change from the Laravel original. `GET
   /password-policy` reports whether the caller is on the default `qwerty`
   password or one older than three calendar months, and whether a waiver is

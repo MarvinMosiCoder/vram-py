@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -26,6 +27,11 @@ def user_sidebar(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
+
+    visible = select(models.MenusRoles.id_adm_menus).where(
+        models.MenusRoles.id_adm_role == current_user.id_adm_role
+    )
+
     def child_query(parent_id):
         return (
             db.query(models.Menuses)
@@ -33,15 +39,13 @@ def user_sidebar(
                 models.Menuses.is_active == 1,
                 models.Menuses.is_dashboard == 0,
                 models.Menuses.parent_id == parent_id,
-                models.Menuses.id_adm_role == current_user.id_adm_role,
+                models.Menuses.id.in_(visible),
             )
             .order_by(models.Menuses.sorting.asc())
         )
 
     menus = child_query(None).all()
-    # One level deep, matching Laravel's CommonHelpers::sidebarMenu() -- a
-    # top-level menu's own children, fetched per-row and attached here so
-    # MenuOut (from_attributes=True) can read them straight off the object.
+
     for menu in menus:
         menu.children = child_query(menu.id).all() or None
     return menus

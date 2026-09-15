@@ -1,5 +1,3 @@
-import re
-
 from fastapi import HTTPException
 from sqlalchemy import func, select
 

@@ -20,6 +20,7 @@ from app.models.admin.adm_notifications import AdminNotifications
 from app.models.admin.adm_announcements import AdminAnnouncements
 from app.models.admin.adm_password_history import AdminPasswordHistory
 from app.models.admin.chat_conversations import ChatConversations
+from app.models.admin.adm_menus_roles import MenusRoles
 
 __all__ = [
         "Role", 
@@ -33,4 +34,5 @@ __all__ = [
         "AdminAnnouncements",
         "AdminPasswordHistory",
         "ChatConversations",
+        "MenusRoles",
     ]
