@@ -54,13 +54,24 @@
   --color-black-table-color: var(--panel);
 }
 
+/* The themed ground and text colour for everything that does not paint its
+   own. Without this an element with no text colour falls back to the browser
+   default black, which disappears against the black theme's charcoal panels --
+   modal and panel headings inherited rather than declared a colour. Scoped
+   palettes such as .login-theme still override it, since they redefine --text
+   and --bg on themselves. */
+body {
+  background-color: var(--bg);
+  color: var(--text);
+}
+
 /* Preserve the original login palette independently of the account theme. */
 .login-theme {
   --bg: #0f1115;
   --panel: #171a21;
   --panel-border: #262b35;
   --text: #e7e6e1;
-  --text-dim: #8a8f9c;
+  --text-dim: #c1c7d5;
   --app-theme-color: #3ecf8e;
   --app-theme-contrast: #0b0d10;
   --app-theme-readable: #2a8f63;

@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [announcementQueue, setAnnouncementQueue] = useState([]);
+  const [passwordPolicy, setPasswordPolicy] = useState(null);
 
   async function loadAnnouncements() {
     try {
@@ -18,6 +19,20 @@ export function AuthProvider({ children }) {
       console.error("Failed to load announcements", error);
       setAnnouncementQueue([]);
       return [];
+    }
+  }
+
+  async function loadPasswordPolicy() {
+    try {
+      const { data } = await api.get("/password-policy");
+      setPasswordPolicy(data);
+      return data;
+    } catch (error) {
+      // Fail open. The forced-change modal is a prompt, not a security
+      // boundary, so a failed policy read must not lock an admin out.
+      console.error("Failed to load password policy", error);
+      setPasswordPolicy(null);
+      return null;
     }
   }
 
@@ -34,6 +49,7 @@ export function AuthProvider({ children }) {
       .get("/me")
       .then(async (res) => {
         setUser(res.data);
+        await loadPasswordPolicy();
         await loadAnnouncements();
       })
       .catch(() => localStorage.removeItem("token"))
@@ -52,6 +68,7 @@ export function AuthProvider({ children }) {
 
     const me = await api.get("/me");
     setUser(me.data);
+    await loadPasswordPolicy();
     await loadAnnouncements();
   }
 
@@ -65,6 +82,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("token");
     setUser(null);
     setAnnouncementQueue([]);
+    setPasswordPolicy(null);
   }
 
   return (
@@ -78,6 +96,9 @@ export function AuthProvider({ children }) {
         announcementQueue,
         setAnnouncementQueue,
         loadAnnouncements,
+        passwordPolicy,
+        setPasswordPolicy,
+        loadPasswordPolicy,
       }}
     >
       {children}

@@ -13,7 +13,7 @@ export default function AdminSidebar() {
 
   return (
     <div className="mt-7">
-      <p className="mb-2.5 px-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-skin-dim">
+      <p className="mb-2.5 px-2.5 text-[10px] font-bold uppercase tracking-[0.16em]">
         Admin Menu
       </p>
       <div className="space-y-1.5">

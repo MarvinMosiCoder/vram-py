@@ -14,6 +14,43 @@
 Password-reset JSX files remain legacy Inertia components and are not connected
 to the current App routes. Do not present them as a working recovery flow.
 
+## Forced password change
+
+After `/me`, AuthContext requests `GET /password-policy` and stores the result.
+`ForcePasswordGate` in `App.jsx` shows a non-dismissible modal whenever
+`must_change` is set, ahead of the announcement gate; announcements wait until
+the password is resolved, matching the order in Laravel's
+`CheckUserForceChangePassword` middleware.
+
+`must_change` is true when the stored hash matches the default password
+`qwerty`, or the password is more than `PASSWORD_MAX_AGE_MONTHS` (3) calendar
+months old. Changing the password clears both conditions, because
+`save-change-password` writes `last_password_updated` and resets `waiver_count`.
+
+| Field | Meaning |
+| --- | --- |
+| `must_change` | Default password, or older than three months |
+| `is_default_password` | The hash matches `qwerty` |
+| `can_waive` | Not the default password and fewer than `MAX_WAIVERS` (4) waivers used |
+| `waivers_used`, `max_waivers` | Progress against the cap |
+
+`POST /waive-change-password` stamps `last_password_updated` to today and
+increments `waiver_count`, so waiving restarts the three-month clock and the
+counter only advances the next time the password expires. The endpoint re-checks
+both rules itself: the modal disables its Waive button, but the button is not
+the enforcement.
+
+The gate is a prompt, not a security boundary. The access token stays valid
+while the modal is open, so the API remains reachable around it; a failed
+policy read fails open rather than locking the account out of the admin.
+
+Three deliberate differences from the Laravel original: a null
+`last_password_updated` counts as expired here, where `Carbon::parse(null)`
+resolves to "now" and silently exempts the user; the waiver cap compares `>=`
+rather than the original's `=== 4`, which let a count of 5 waive again; and
+`/check-waive` is not ported, since its inverted boolean `status` is folded into
+`can_waive`.
+
 ## Users
 
 Open `/users`; use `/users/add` or `/users/edit/<id>` for the custom forms.

@@ -9,7 +9,7 @@ class AdminPasswordHistory(Base):
     id = Column(Integer, primary_key=True, index=True)
     adm_user_id = Column(Integer, nullable=True)
     adm_user_old_pass = Column(String(255), nullable=True)
-    updated_by = Column(Integer, nullable=True)
+    created_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, nullable=True)
 
 

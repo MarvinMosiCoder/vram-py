@@ -234,7 +234,7 @@ const AppNavbar = () => {
 
             {showMenu && (
               <div
-                className="absolute right-0 top-[calc(100%+10px)] z-150 flex w-65 flex-col gap-0 rounded-[10px] border border-skin-border bg-skin-panel py-3.5 shadow-[0_12px_32px_rgba(0,0,0,0.35)]"
+                className="absolute right-0 md:right-[calc(100%+-190px)] top-[calc(100%+10px)] z-150 flex w-75 flex-col gap-0 rounded-[10px] border border-skin-border bg-skin-panel py-3.5 shadow-[0_12px_32px_rgba(0,0,0,0.35)]"
                 role="menu"
               >
                 <div className="mb-1 flex items-center gap-2.5 border-b border-skin-border px-4 pb-3">
@@ -262,6 +262,17 @@ const AppNavbar = () => {
                 >
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-(--app-theme-soft) text-(--app-theme-readable)"><i className='fa fa-id-card-alt text-[11px]' /></span>
                     <span className="min-w-0 flex-1 font-poppins">Profile</span>
+                    <i className="fa fa-chevron-right text-[8px] text-(--das-text-soft)" />
+                </Link>
+                <Link
+                    to="/change-password"
+                    className="flex min-h-10.5 items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-(--das-text) transition hover:bg-(--das-hover)"
+                    onClick={() => {
+                        setShowMenu(false);
+                    }}
+                >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-(--app-theme-soft) text-(--app-theme-readable)"><i className='fa fa-lock text-[11px]' /></span>
+                    <span className="min-w-0 flex-1 font-poppins">Change Password</span>
                     <i className="fa fa-chevron-right text-[8px] text-(--das-text-soft)" />
                 </Link>
                 <Link

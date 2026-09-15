@@ -4,6 +4,50 @@
 
 ### Added
 
+- Added the forced password change from the Laravel original. `GET
+  /password-policy` reports whether the caller is on the default `qwerty`
+  password or one older than three calendar months, and whether a waiver is
+  still available; `POST /waive-change-password` stamps the date and increments
+  `waiver_count`. `ForcePasswordGate` in `App.jsx` shows a non-dismissible
+  modal ahead of the announcement gate. Three deliberate departures from
+  Laravel: a null `last_password_updated` counts as expired rather than being
+  silently exempted by `Carbon::parse(null)`; the waiver cap compares `>=`
+  instead of `=== 4`, which let a count of 5 waive again; and the waive
+  endpoint re-checks the default-password rule server-side, where the original
+  relied only on hiding the button. `/check-waive` is not ported - its
+  inverted boolean `status` is folded into `can_waive`. See
+  [admin processes](admin-processes.md#forced-password-change).
+
+- Extracted `components/form/ChangePasswordForm.jsx` and
+  `hooks/useSignOutCountdown.js` so the `/change-password` page and the forced
+  modal share one form and one sign-out countdown. The Laravel original keeps
+  two copies of this form, which have since drifted. `Modal` gained
+  `dismissible` and `widthClass` props, both defaulting to current behaviour.
+
+### Fixed
+
+- Gave `body` the themed `--bg`/`--text` pair. Nothing set a document text
+  colour: `AppContent` painted `bg-skin-bg` but no colour, and the only
+  `color: var(--text)` was scoped to `.login-theme`. Any element that declared
+  no colour of its own therefore fell back to the browser default black, which
+  disappears against the black theme's `#0f1115`/`#171a21` surfaces - modal and
+  panel headings inherited rather than declared one. See
+  [frontend](frontend.md#theme-process).
+
+### Changed
+
+- Rebuilt the change-password page on the shared theme tokens. It previously
+  branched on `isDark` with fixed grey and sky colours, so it ignored the
+  role's `theme_color` entirely; surfaces, text, inputs, focus rings and the
+  submit button now read `--skin-*`/`--app-theme-*`, and the button uses
+  `text-theme-contrast` so its label stays readable on any accent. Validation
+  colours on the strength meter and requirement ticks stay fixed on purpose.
+  A successful change now counts down from three in both the toast and the
+  page before signing out, replacing a `Swal.fire` confirm that could not run
+  (`Swal`, `swalColor` and Inertia's `router` were all undefined here, and
+  `sweetalert2` is not a dependency). Also fixed `<Link href>` to `to`, which
+  had left the Dashboard link inert.
+
 - Added stub mode for chat development. `CHAT_FAKE=1` binds
   `helpers/fake_api.fake_agent_call` in place of `call_agent`, so replies are
   canned and no request reaches the provider, while conversation storage,

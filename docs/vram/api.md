@@ -24,8 +24,13 @@ configured by `ACCESS_TOKEN_EXPIRE_MINUTES` (default 60). There is no refresh ro
 | GET | `/user_sidebar` | Authenticated role-scoped menu tree |
 | GET | `/system/logo` | Public logo setting |
 | GET | `/system/appname` | Public application name setting |
+| GET | `/password-policy` | Authenticated forced-change policy for the caller |
+| POST | `/save-change-password` | Authenticated password change; `{message, status}` |
+| POST | `/waive-change-password` | Authenticated waiver; refused on default password or at the cap |
 
 Profile endpoint contracts are maintained in [profile and navbar](profile-navbar.md).
+The password-policy fields and the waiver rules are documented in
+[admin processes](admin-processes.md#forced-password-change).
 Client login/logout behavior and incomplete permission enforcement are documented
 in [admin processes](admin-processes.md), not implied by the access table above.
 

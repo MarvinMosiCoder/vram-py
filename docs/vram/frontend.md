@@ -23,6 +23,14 @@ saved-theme dialog from Laravel is not currently implemented in this port.
 | Text on mint actions | `#0b0d10` |
 | Error accent | `#e2665a` |
 
+`body` carries `background-color: var(--bg)` and `color: var(--text)`, so an
+element that declares no colour of its own inherits the current theme rather
+than the browser default black - which is invisible on the black theme's
+charcoal panels. Scoped palettes such as `.login-theme` still win, because they
+redefine `--bg`/`--text` on themselves. Prefer an explicit `text-skin-text` or
+`text-skin-dim` on anything whose colour matters; the body rule is the floor,
+not a licence to leave colour unset.
+
 The black theme retains `skin-black` / `bg-skin-black` identity while adopting
 the login charcoal/green palette. Primary controls and active navigation use mint;
 surfaces remain charcoal. Profile `--das-*` aliases follow these tokens in black

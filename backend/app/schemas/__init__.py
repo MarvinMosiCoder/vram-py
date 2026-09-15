@@ -20,6 +20,7 @@ from app.schemas.admin import (
     ChatRequest,
     ChatConversationsOut,
     ConversationSettings,
+    AdmPasswordHistoryIn,
 )
 
 __all__ = [
@@ -36,5 +37,6 @@ __all__ = [
     "ChatMessage",
     "ChatRequest",
     "ChatConversationsOut",
-    "ConversationSettings"
+    "ConversationSettings",
+    "AdmPasswordHistoryIn",
 ]
