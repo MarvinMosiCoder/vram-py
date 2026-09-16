@@ -54,6 +54,13 @@ These routes require authentication; capability checks belong to handlers.
 | Bulk | `POST /<path>/bulk-action` | Consult controller's `post_bulk_action` body contract |
 | Export | `POST /<path>/export` | Filename/format/limit plus supported query filters |
 
+Menu management uses custom actions rather than the generated CRUD contract.
+`GET /menus/roles` returns a direct options array, while `GET /menus` embeds
+options in its `roles` property. `POST /menus/move` persists menu placement;
+`POST /menus/update` is currently a debug stub and does not persist edits.
+See [menu management](admin-processes.md#menu-management) for the contracts,
+access checks, and [edit status](admin-processes.md#editing-menus-in-progress).
+
 ## List query parameters
 
 | Parameter | Behavior |

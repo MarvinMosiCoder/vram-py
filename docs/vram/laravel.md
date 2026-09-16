@@ -36,8 +36,23 @@ Original application: `C:/laragon/www/vram`. Original documentation:
   permission flags, while `adm_menus_roles` is role x menu visibility. The
   originals are `adm_privileges_roles` and `adm_menus_privileges`.
 - A top-level menu has `parent_id` `NULL` here and `0` in Laravel. Anything
-  ported literally from `createMenu`, `updateMenu` or `autoUpdateMenu` has to
-  be translated, and the failure is silent: the sidebar simply returns nothing.
+  ported literally from `createMenu` or `updateMenu` has to be translated, and
+  the failure is silent: the sidebar simply returns nothing.
+- Menu reordering is not a port of `autoUpdateMenu`. Laravel posts the whole
+  nested `items` array and rewrites `parent_id` on every row from it, saving
+  each model separately and re-seeding `Session::put('user_menus')`. This port's
+  `post_move` takes the moved ID, destination parent, and destination sibling
+  order. It updates the parent and both affected groups' sorting in one commit,
+  and has no session cache to refresh. It rejects nesting menus with children
+  to preserve the one-child-level tree. See
+  [admin processes](admin-processes.md#reordering).
+- The reorder drag uses the browser's native drag events. Laravel's
+  `MenuManagement.jsx` uses `@hello-pangea/dnd`, which is not a dependency of
+  this port's frontend.
+- Menu editing opens a modal in this port. Laravel's `editMenu` renders
+  `MenuManagementEdit`, and `updateMenu` persists menu fields and role assignments.
+  This port's modal is present, but its `post_update` still stops at a debug
+  dump; see [edit status](admin-processes.md#editing-menus-in-progress).
 - Laravel's forced password change runs from a session flag set in
   `LoginController` and a middleware that redirects; this port computes the
   same decision server-side and serves it from `GET /password-policy`. See

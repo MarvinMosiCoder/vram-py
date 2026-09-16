@@ -1,5 +1,5 @@
 from sqlalchemy import select
-
+from fastapi import HTTPException
 from app import models
 from app.helpers import common_helpers
 from app.helpers.generated_module import ModuleController
@@ -52,6 +52,7 @@ class MenusController(ModuleController):
             "icon": menu.icon,
             "sorting": menu.sorting,
             "is_active": menu.is_active,
+            "is_dashboard": menu.is_dashboard,
             "roles": self._roles_of(menu.id),
         }
         if with_children:
@@ -76,3 +77,147 @@ class MenusController(ModuleController):
             .order_by(models.Role.name.asc())
         )
         return [{"id": row.id, "name": row.name} for row in self.db.execute(stmt)]
+
+    @action
+    def post_move(self):
+        if not common_helpers.is_update(self.user, self.module.path):
+            common_helpers.deny()
+
+        menu_id = self.body.get("menu_id")
+        parent_id = self.body.get("parent_id")
+        ids = self.body.get("ids")
+
+        if type(menu_id) is not int:
+            raise HTTPException(422, "menu_id must be an integer.")
+
+        if parent_id is not None and type(parent_id) is not int:
+            raise HTTPException(422, "parent_id must be an integer or null.")
+
+        if (
+            not isinstance(ids, list)
+            or not ids
+            or any(type(value) is not int for value in ids)
+        ):
+            raise HTTPException(422, "ids must be a non-empty list of integers.")
+
+        if len(ids) != len(set(ids)):
+            raise HTTPException(422, "Duplicate menu IDs.")
+
+        moved = (
+            self.db.query(models.Menuses)
+            .filter(models.Menuses.id == menu_id)
+            .first()
+        )
+
+        if moved is None:
+            raise HTTPException(404, "Menu not found.")
+
+        if moved.is_active != 1 or moved.is_dashboard != 0:
+            raise HTTPException(422, "This menu cannot be moved.")
+
+        if parent_id == menu_id:
+            raise HTTPException(422, "A menu cannot be its own parent.")
+
+        if parent_id is not None:
+            parent = (
+                self.db.query(models.Menuses)
+                .filter(models.Menuses.id == parent_id)
+                .first()
+            )
+
+            if (
+                parent is None
+                or parent.parent_id is not None
+                or parent.is_active != 1
+                or parent.is_dashboard != 0
+            ):
+                raise HTTPException(422, "Choose an active top-level parent.")
+
+            # Include inactive children: they would become grandchildren too.
+            has_children = (
+                self.db.query(models.Menuses.id)
+                .filter(models.Menuses.parent_id == menu_id)
+                .first()
+            )
+
+            if has_children:
+                raise HTTPException(
+                    422,
+                    "Move this menu's children first before nesting it.",
+                )
+
+        def siblings(group_parent_id):
+            query = self.db.query(models.Menuses).filter(
+                models.Menuses.is_active == 1
+            )
+
+            if group_parent_id is None:
+                query = query.filter(
+                    models.Menuses.parent_id.is_(None),
+                    models.Menuses.is_dashboard == 0,
+                )
+            else:
+                query = query.filter(
+                    models.Menuses.parent_id == group_parent_id
+                )
+
+            return query.order_by(
+                models.Menuses.sorting.asc(),
+                models.Menuses.id.asc(),
+            ).all()
+
+        old_parent_id = moved.parent_id
+        destination = siblings(parent_id)
+
+        expected_ids = {menu.id for menu in destination}
+        expected_ids.add(menu_id)
+
+        if set(ids) != expected_ids:
+            raise HTTPException(
+                422,
+                "Menu list changed. Refresh and try again.",
+            )
+
+        remaining = []
+        if old_parent_id != parent_id:
+            remaining = [
+                menu
+                for menu in siblings(old_parent_id)
+                if menu.id != menu_id
+            ]
+
+        # All validation and reads are complete before changing records.
+        moved.parent_id = parent_id
+
+        by_id = {menu.id: menu for menu in destination}
+        by_id[menu_id] = moved
+
+        for position, current_id in enumerate(ids, start=1):
+            by_id[current_id].sorting = position
+
+        for position, menu in enumerate(remaining, start=1):
+            menu.sorting = position
+
+        self.db.commit()
+
+        return {"message": "Menu moved.", "status": "success"}
+
+    @action
+    def get_roles(self):
+        stmt = (
+            select(models.Role.id, models.Role.name)
+            .order_by(models.Role.name.asc())
+        )
+        return [
+            {"value": row.id, "label": row.name}
+            for row in self.db.execute(stmt)
+        ]
+
+    @action
+    def post_update(self):
+        if not common_helpers.is_update(self.user, self.module.path):
+            common_helpers.deny()
+
+        menu_id = self.body.get("id")
+        roles = self.body.get("roles")
+        common_helpers.dd(roles)

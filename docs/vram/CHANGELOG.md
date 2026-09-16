@@ -2,7 +2,60 @@
 
 ## Unreleased
 
+- Documented the menu edit modal, its role multi-select and Route/URL selector,
+  and the separate `/menus/roles` options endpoint. Recorded the direct-array
+  response fix (`res.data`, not `res.data.roles`) and the distinction between
+  `{value, label}` options and `{id, name}` assignments. Corrected availability:
+  the pencil opens a draft, but `post_update` currently returns a debug dump
+  instead of saving fields or role assignments. Verified against current source;
+  this documentation update did not exercise browser editing or API mutations.
+
+- Tightened menu spacing from 32-pixel gaps to stable 8-pixel gaps, replacing
+  the tall placeholder with an overlaid insertion line. Added grip indicators,
+  child guide lines/counts, and a compact header with save status. Production
+  build passed. Isolated Chrome checks with built CSS and mock menus covered
+  dark/light at 1100px/390px, no horizontal overflow, and stable native drag
+  startup on all four cards. Live database saves and touch dragging were not tested.
+
+- Fixed native menu drags cancelling at startup when expanding gaps and mounting
+  empty child areas shifted the source card. Gaps now keep their height and child
+  areas stay mounted; labels disable text selection. An isolated headless Chrome
+  check with mock menu data reproduced early drag cancellation before the fix
+  and verified stable native drags on three root cards and one child afterwards.
+  This browser check uses simplified layout CSS, not the authenticated app or DB.
+
+- Fixed menu root targets defaulting to forbidden nesting across most of their
+  width. Nesting now uses deliberate horizontal movement, while cards accept
+  before/after drops. Added a move-request timeout and server-order reload so
+  stalled saves cannot leave the page indefinitely displaying a save lock.
+  Production build and mocked save-lock checks passed for success, rejection,
+  timeout recovery, and failed recovery; browser interaction was not tested.
+
+- Completed the menu drag UI for the existing `post_move` handler: insertion
+  gaps show a dashed, indented destination preview; empty parents accept children;
+  root/child ordering, promotion, and cross-parent child moves use one save path.
+  Corrected downward gap insertion and blocked overlapping saves. Removed the
+  old recursive card drop area and duplicate `renderGroup` declaration.
+  Verified the production build, move logic with Node assertions, and backend syntax with Python AST;
+  browser interaction and live database persistence were not exercised.
+
 ### Added
+
+- Added top-level menu reordering. `/menus` cards are draggable through the
+  browser's native drag events - no drag-and-drop library was added - and
+  `POST /menus/reorder` takes `{ids: [...]}` in the new order and assigns
+  `sorting` from each id's position, so the client never sends a sort number of
+  its own. The action filters to `parent_id IS NULL`, assigns through the ORM
+  and commits once, so a failure cannot leave a partial order; an id that is
+  missing or not top-level returns 422. The page reorders optimistically and
+  restores the pre-drag array on a failed save.
+
+  It is not a port of Laravel's `autoUpdateMenu`, which posts the whole nested
+  `items` array, rewrites `parent_id` on every row, saves each model separately
+  and re-seeds a session cache this port does not have. Children are rendered
+  but not draggable, so cross-parent moves and the `parent_id` writes they need
+  are still unwritten. See
+  [admin processes](admin-processes.md#reordering).
 
 - Renamed `adm_password_history.updated_by` to `created_at` and retyped it from
   `Integer` to `DateTime`, so the history row records when a password was set.
@@ -27,8 +80,8 @@
 - Implemented `MenusController.get_index` and a read-only `/menus` page listing
   each active menu as a card with its assigned roles, plus its one level of
   children. It is a custom page rather than a generated module: the screen has
-  no table, so it declares no `table_fields`. Create, edit, reorder and delete
-  are not implemented; the previous `menus/index.jsx` was a copy of the roles
+  no table, so it declares no `table_fields`. Create, edit and delete are not
+  implemented; the previous `menus/index.jsx` was a copy of the roles
   page and rendered `GeneratedModulePage` against columns `adm_menuses` does
   not have. See [admin processes](admin-processes.md#menu-management).
 

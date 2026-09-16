@@ -148,10 +148,45 @@ each with a one-level `children` list and a `roles` list of `{id, name}`), and
 renders it; the file's own path is its registration, through the
 `import.meta.glob` in `modulePages.js`.
 
-Implemented so far is the read only. Create, edit, reorder and delete are not
-written, and the card's pencil button is inert. The Laravel original
-(`MenusController.php` plus `MenuManagement.jsx`) additionally has
-`createMenu`, `updateMenu`, `autoUpdateMenu` drag ordering and `editMenu`.
+Listing, reordering, and moves between top-level and child groups are implemented.
+The pencil now opens an edit modal, but saving edits is unfinished; see
+[editing menus](#editing-menus-in-progress). Create and delete remain unwritten.
+
+### Reordering
+
+Cards use native browser drag events. `index.jsx` renders insertion gaps between
+cards and beneath empty parents. Each gap reserves 8 pixels even when idle,
+and empty child areas remain mounted so starting a native drag never shifts the
+source card. Cards disable text selection to keep labels draggable. An absolute
+accent line and destination label mark the active gap without taking extra space.
+Rows include a grip indicator; indented children share a vertical guide line,
+and parents display their child count. Cards also accept drops: their upper/lower halves select
+before/after gaps. Root targets default to top-level ordering; moving at least
+32 pixels right from the drag start selects a child destination when allowed.
+Invalid nesting on a root target falls back to root ordering. Child gaps select
+an exact insertion position within that parent. Root menus with children can be
+reordered but cannot be nested, because only one child level is supported.
+
+`dragFrom` stores the source parent and index. Hover changes only `dropTarget`;
+the menu tree changes on drop. Gap indices are measured before removal, so a
+same-group downward move subtracts one from the insertion index. Cards and child
+groups are copied rather than mutated, preserving the rollback snapshot.
+
+`POST /menus/move` takes `{menu_id, parent_id, ids}`. `parent_id` is null for
+top level; `ids` is the complete destination order after the move. The handler
+checks update capability, input types, duplicate IDs, the moved record, and the
+destination group. It rejects self-parenting, inactive/dashboard destinations,
+and nesting a menu that has children (including inactive children). It changes
+`parent_id`, renumbers destination and remaining source siblings, and commits
+once. Existing capability-helper limitations still apply.
+
+Saving is optimistic. A failed request restores the previous tree and shows the
+server's error when available. A ref blocks another drag during a pending save;
+the page also disables dragging and displays a saving status. Move requests time
+out after 15 seconds. Since a timed-out write may have committed, the page reloads
+the server order (with a 10-second read timeout) before enabling another move.
+If that read also fails, a page error asks the user to refresh when the server
+is available. The save lock is released in all settled request paths.
 
 Its menu type is limited to `Route` and `URL`, matching the current Laravel
 form. `CommonHelpers::sidebarMenu()` also resolves `Module`, `Statistic` and
@@ -159,6 +194,61 @@ form. `CommonHelpers::sidebarMenu()` also resolves `Module`, `Statistic` and
 from; this port implements none of them, and `UserSidebar.jsx` does not yet
 branch on type at all - it builds an internal path for every menu, so a `URL`
 menu would not resolve correctly.
+
+### Editing menus (in progress)
+
+The pencil on both parent and child cards calls `openEdit(menu)`. It copies the
+record into `editing` rather than modifying the displayed menu. The shared
+`Modal`, `TextInput`, `SelectInput`, and `InputError` components render roles,
+name, path, icon class, and type (`Route` or `URL`). Select fields replace the
+text input for that field; rendering both would let the text input overwrite
+the roles array with a string. Cancel discards the draft.
+
+`openEdit` also copies `status` from `is_active` and copies `is_dashboard`, but
+the current modal has no controls for either. `slug` is serialized by the API
+but is not included in the edit draft. This is not yet the full Laravel edit
+workflow.
+
+#### Role options and selected roles
+
+The page loads options through a separate authenticated `GET /menus/roles`
+request. `get_roles` is decorated with `@action`, so it is a dynamic endpoint,
+not just a helper. It sorts all roles by name and returns an array directly.
+It currently adds no module capability check of its own beyond the route's
+authentication. The list action `get_index` does check view capability.
+
+| Source | Shape | Frontend use |
+| --- | --- | --- |
+| `GET /menus` | Object with `roles: [{value, label}]` | `res.data.roles` |
+| `GET /menus/roles` | `[{value, label}]` | `setRoles(res.data ?? [])` |
+| Each menu's `roles` | `[{id, name}]` | Assigned roles copied into `editing.roles` |
+
+Reading `res.data.roles` from `/menus/roles` produces `undefined`; the `?? []`
+fallback then silently empties the options. Keep the response shapes distinct.
+Both list requests currently run on mount; either failure shows the page's
+generic "Could not load menus" error.
+
+The roles selector uses `isMulti`. Its `value` filters option objects by matching
+`option.value` to `editing.roles[].id`. On change, selected options are mapped
+back to `{id: option.value, name: option.label}`. Empty selection becomes `[]`.
+Role visibility belongs in `adm_menus_roles`; the old `id_adm_role` column is
+not the assignment mechanism.
+
+#### Save boundary
+
+`saveEdit` posts the draft to `/menus/update` with a 15-second timeout. The
+client expects `{menu: <updated serialized menu>}`, then replaces the matching
+parent or child card, closes the modal, and shows a success toast. Field errors
+are read from an object in `detail`. Inputs, submission, and modal dismissal
+are disabled while the request is pending.
+
+**The current backend does not save edits.** `post_update` checks update
+capability, reads `id` and `roles`, then calls `common_helpers.dd(roles)`.
+The `DumpAndDie` handler in `app/main.py` returns HTTP 500 with `{"__dd__": ...}`.
+No edit validation, record update, role-pivot synchronization, or commit exists
+in this method yet. The frontend's expected success response is therefore a
+pending contract, not an implemented API result. Removing the debug call alone
+does not implement saving.
 
 ## Availability
 
@@ -168,7 +258,7 @@ menu would not resolve correctly.
 | Profile | Implemented API and `/profile` page; see [profile guide](profile-navbar.md) |
 | Change password | Implemented API and `/change-password` page, with history reuse checks |
 | Forced password change | Implemented policy endpoint, waiver endpoint and client gate; the gate is a prompt, not server enforcement |
-| Menu management | Sidebar reads work. `MenusController` implements `get_index` only, and `/menus` renders a read-only list; no create, edit, reorder or delete exists yet |
+| Menu management | Listing, role options, sibling ordering, promotion, nesting of menus without children, and cross-parent child moves are implemented. The pencil opens an edit modal, but `post_update` stops at a debug dump and does not save. Create/delete remain unwritten |
 | Notifications module | Registered demonstration actions; not a complete inbox or generated CRUD payload |
 | Module generator | Python `generate()` helper exists; no registered ModulesController admin screen |
 | Settings, API generator, email templates, statistics builder, logs | Seeded entries do not imply implemented controllers |
