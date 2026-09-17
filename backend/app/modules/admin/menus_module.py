@@ -219,5 +219,114 @@ class MenusController(ModuleController):
             common_helpers.deny()
 
         menu_id = self.body.get("id")
-        roles = self.body.get("roles")
-        common_helpers.dd(roles)
+        roles = self.body.get("roles", [])
+        menu_update = self.body
+
+        menu = self.db.query(models.Menuses).get(menu_id)
+        if not menu:
+            raise HTTPException(
+                422,
+                "Mune not found!",
+            )
+         # Update menu fields
+        for key, value in self.body.items():
+            if key not in {"id", "roles"} and hasattr(menu, key):
+                setattr(menu, key, value)
+    
+        role_ids = [r["id"] for r in roles]
+      
+        # Get all current menu-role relationships
+        menu_roles = self.db.query(models.MenusRoles).filter(
+            models.MenusRoles.id_adm_menus == menu_id
+        ).all()
+        existing_role_ids = { menu_role.id_adm_role for menu_role in menu_roles }
+
+        new_role_ids = set(role_ids)
+
+        for role_id in new_role_ids - existing_role_ids:
+            self.db.add(
+                models.MenusRoles(
+                    id_adm_menus=menu_id,
+                    id_adm_role=role_id
+                )
+            )
+
+        # Remove unchecked roles
+        for menu_role in menu_roles:
+            if menu_role.id_adm_role not in new_role_ids:
+                self.db.delete(menu_role)
+
+        self.db.commit()
+        
+        return {
+            "message": "Menu updated.",
+            "status": "success",
+            "menu": menu,
+        }
+
+    @action
+    def post_add(self):
+        if not common_helpers.is_create(self.user, self.module.path):
+            common_helpers.deny()
+
+        menu_name = self.body.get("name")
+        roles = self.body.get("roles",[])
+        menu = (self.db.query(models.Menuses).filter(
+               models.Menuses.name == menu_name 
+                ).first()
+        )
+        if menu:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "Menu already exists.",
+                    "status": "error",
+                },
+            )
+        
+        # Create menu
+        try:
+            add_menu = models.Menuses(
+                name=self.body.get("name"),
+                type=self.body.get("type"),
+                path=self.body.get("path"),
+                slug=self.body.get("slug"),
+                icon=self.body.get("icon"),
+                is_active=self.body.get("is_active", 1),
+                is_dashboard=0,
+                id_adm_role=1
+            )
+
+            self.db.add(add_menu)
+
+            # Get generated menu ID before commit
+            self.db.flush()
+
+            for role in roles:
+                self.db.add(
+                    models.MenusRoles(
+                        id_adm_menus=add_menu.id,
+                        id_adm_role=role["id"],
+                    )
+                )
+
+            self.db.commit()
+            self.db.refresh(add_menu)
+
+            return {
+                "message": "Menu added!",
+                "status": "success",
+                "menu": add_menu,
+            }
+
+        except Exception as e:
+            self.db.rollback()
+
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": str(e),
+                    "status": "error",
+                }
+            )
+     

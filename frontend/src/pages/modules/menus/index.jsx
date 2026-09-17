@@ -19,62 +19,201 @@ const TYPES = [
   }
 ];
 
+const STATUSES = [
+  {
+      value: 1,
+      label: 'ACTIVE',
+  },
+  {
+      value: 0,
+      label: 'INACTIVE',
+  },
+]
+
+
+const EMPTY_MENU_FORM = {
+  name: "",
+  path: "",
+  icon: "",
+  roles: [],
+  type: "",
+  slug: "",
+  is_status: "",
+
+};
+
+const MENU_FIELDS = [
+  ["roles", "Roles"],
+  ["name", "Menu name"],
+  ["path", "Path"],
+  ["icon", "Icon class"],
+  ["type", "Type"],
+  ["slug", "Slug"],
+  ["is_status", "Active"],
+];
+
+function MenuFormFields({
+  form,
+  setForm,
+  errors,
+  setErrors,
+  roles,
+  disabled = false,
+  idPrefix,
+  autoFocusName = false,
+}) {
+  return MENU_FIELDS.map(([field, label]) => {
+    const inputId = `${idPrefix}-${field}`;
+
+    return (
+      <div key={field} className="space-y-1.5">
+        <label htmlFor={inputId} className="block text-xs text-skin-dim">
+          {label}
+        </label>
+
+        {field === "roles" ? (
+          <SelectInput
+            id={inputId}
+            type="react-select"
+            value={roles.filter((option) =>
+              (form.roles ?? []).some(
+                (role) => String(role.id) === String(option.value)
+              )
+            )}
+            options={roles}
+            placeholder="Choose roles"
+            onChange={(selected) => {
+              setForm((current) => ({
+                ...current,
+                roles: (selected ?? []).map((option) => ({
+                  id: option.value,
+                  name: option.label,
+                })),
+              }));
+
+              setErrors((current) => ({ ...current, roles: "" }));
+            }}
+            disabled={disabled}
+            isMulti
+          />
+        ) : field === "type" ? (
+          <SelectInput
+            id={inputId}
+            type="react-select"
+            value={TYPES.find((option) => option.value === form.type) ?? null}
+            options={TYPES}
+            placeholder="Choose type"
+            onChange={(selected) => {
+              setForm((current) => ({
+                ...current,
+                type: selected?.value ?? "",
+              }));
+
+              setErrors((current) => ({ ...current, type: "" }));
+            }}
+            disabled={disabled}
+          />
+        ) : field === "is_status" ? (
+          <SelectInput
+            id={inputId}
+            type="react-select"
+            value={STATUSES.find((option) => option.value === form.is_status) ?? null}
+            options={STATUSES}
+            placeholder="Choose Status"
+            onChange={(selected) => {
+              setForm((current) => ({
+                ...current,
+                is_status: selected?.value ?? "",
+              }));
+
+              setErrors((current) => ({ ...current, is_status: "" }));
+            }}
+            disabled={disabled}
+          />
+        ) : (
+          <TextInput
+            id={inputId}
+            value={form[field] ?? ""}
+            required={field === "name"}
+            maxLength={255}
+            disabled={disabled}
+            autoFocus={autoFocusName && field === "name"}
+            aria-invalid={Boolean(errors[field])}
+            onChange={(event) => {
+              const value = event.target.value;
+
+              setForm((current) => ({
+                ...current,
+                [field]: value,
+              }));
+
+              setErrors((current) => ({ ...current, [field]: "" }));
+            }}
+          />
+        )}
+
+        <InputError message={errors[field]} />
+      </div>
+    );
+  });
+}
+
 function MenuCard({ menu, nested = false, parentId = null, index, dragging, getDragProps, onEdit }) {
   const isDragging =
     dragging?.parentId === parentId &&
     dragging?.index === index;
 
-  const dragProps = getDragProps(parentId, index);
-  return (
-    <div>
-      <article
-        {...dragProps}
-        title={`Drag ${menu.name} to reorder`}
-        className={`group flex select-none items-center gap-3 rounded-lg border border-skin-border bg-skin-panel px-3 py-3 transition-colors hover:border-skin-accent ${
-          dragProps.draggable ? "cursor-grab active:cursor-grabbing" : "cursor-wait"
-        } ${isDragging ? "opacity-40" : ""}`}>
-        <GripVertical className="h-4 w-4 shrink-0 text-skin-dim opacity-50 group-hover:opacity-100" aria-hidden="true" />
-        <div className="min-w-0 flex-1">
-          <p className="m-0 flex items-center gap-2 text-[13px] font-semibold text-skin-text">
-            {menu.icon && <i className={`${menu.icon} text-skin-accent`} aria-hidden="true" />}
-            <span className="truncate">{menu.name}</span>
-            {!nested && menu.children?.length > 0 && (
-              <span className="shrink-0 rounded bg-skin-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-skin-accent">
-                {menu.children.length}
-              </span>
-            )}
-          </p>
-          <p className="m-0 mt-1 flex items-center gap-2 text-[12px] text-skin-dim">
-            <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span className="truncate">
-              {menu.roles.length
-                ? menu.roles.map((role) => role.name).join(", ")
+    const dragProps = getDragProps(parentId, index);
+    return (
+      <div>
+        <article
+          {...dragProps}
+          title={`Drag ${menu.name} to reorder`}
+          className={`group flex select-none items-center gap-3 rounded-lg border border-skin-border bg-skin-panel px-3 py-3 transition-colors hover:border-skin-accent ${
+            dragProps.draggable ? "cursor-grab active:cursor-grabbing" : "cursor-wait"
+          } ${isDragging ? "opacity-40" : ""}`}>
+          <GripVertical className="h-4 w-4 shrink-0 text-skin-dim opacity-50 group-hover:opacity-100" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="m-0 flex items-center gap-2 text-[13px] font-semibold text-skin-text">
+              {menu.icon && <i className={`${menu.icon} text-skin-accent`} aria-hidden="true" />}
+              <span className="truncate">{menu.name}</span>
+              {!nested && menu.children?.length > 0 && (
+                <span className="shrink-0 rounded bg-skin-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-skin-accent">
+                  {menu.children.length}
+                </span>
+              )}
+            </p>
+            <p className="m-0 mt-1 flex items-center gap-2 text-[12px] text-skin-dim">
+              <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">
+                {(menu.roles ?? []).length
+                ? (menu.roles ?? []).map((role) => role.name).join(", ")
                 : "No roles assigned"}
-            </span>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="shrink-0 rounded-md p-1.5 text-skin-dim transition hover:bg-skin-accent-soft hover:text-skin-accent focus-visible:outline-2 focus-visible:outline-skin-accent"
-          aria-label={`Edit ${menu.name}`}
-          title="Edit"
-          draggable={false}
-          onClick={(event) => {
-            event.stopPropagation();
-            onEdit(menu);
-          }}
-        >
-          <Pencil className="h-4 w-4" />
-        </button>
-      </article>
-
-    </div>
-  );
+              </span>
+            </p>
+          </div>
+          <button
+            type="button"
+            className="shrink-0 rounded-md p-1.5 text-skin-dim transition hover:bg-skin-accent-soft hover:text-skin-accent focus-visible:outline-2 focus-visible:outline-skin-accent"
+            aria-label={`Edit ${menu.name}`}
+            title="Edit"
+            draggable={false}
+            onClick={(event) => {
+              event.stopPropagation();
+              onEdit(menu);
+            }}
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+        </article>
+      </div>
+    );
 }
 
 export default function MenusPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [menus, setMenus] = useState([]);
   const dragFrom = useRef(null);
   const savePending = useRef(false);
@@ -82,7 +221,9 @@ export default function MenusPage() {
   const [dragging, setDragging] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const { handleToast } = useToast();
-  const [editing, setEditing] = useState(null);
+  const [addForm, setAddForm] = useState(() => ({ ...EMPTY_MENU_FORM }));
+  const [addErrors, setAddErrors] = useState({});
+  const [editForm, setEditForm] = useState(null);
   const [editErrors, setEditErrors] = useState({});
   const [editSaving, setEditSaving] = useState(false);
   const [roles, setRoles] = useState([]);
@@ -100,8 +241,6 @@ export default function MenusPage() {
 
       handleToast("Menu moved.", "success");
     } catch (error) {
-      // A timed-out write may still have committed. Read the server's order
-      // before permitting another move instead of assuming it was rolled back.
       if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {
         try {
           const response = await api.get("/menus", { timeout: 10000 });
@@ -130,21 +269,68 @@ export default function MenusPage() {
   const openEdit = (menu) => {
     if (savePending.current || editSaving) return;
     setEditErrors({});
-    setEditing({
-      id: menu.id,
-      name: menu.name ?? '',
-      path: menu.path ?? '',
-      icon: menu.icon ?? '',
+    setEditForm({
+      id: menu.id ?? "",
+      name: menu.name ?? "",
+      path: menu.path ?? "",
+      icon: menu.icon ?? "",
       roles: menu.roles ?? [],
-      type: menu.type ?? '',
-      status: menu.is_active ?? '',
-      is_dashboard: menu.is_dashboard ?? ''
+      type: menu.type ?? "",
+      is_status: menu.is_active ?? "",
+      is_dashboard: menu.is_dashboard ?? "",
     });
+  };
+
+  const saveAdd = async (event) => {
+    event.preventDefault();
+
+    if (!addForm) return;
+
+    setLoading(true);
+    setAddErrors({});
+
+    try {
+      const response = await api.post(
+        "/menus/add",
+        addForm,
+        { timeout: 15000 }
+      );
+
+      const addedMenu = response.data.menu;
+
+      setMenus((current) => [
+        ...current,
+        {
+          ...addedMenu,
+          children: addedMenu.children ?? [],
+        },
+      ]);
+
+      setAddForm({ ...EMPTY_MENU_FORM });
+      setAddErrors({});
+
+      handleToast("Menu added.", "success");
+    } catch (error) {
+      const detail = error.response?.data?.detail;
+
+      if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+        setAddErrors(detail);
+      }
+
+      handleToast(
+        typeof detail === "string"
+          ? detail
+          : detail?.message ?? "Could not save. Check the fields and try again.",
+        "error"
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const saveEdit = async (event) => {
     event.preventDefault();
-    if (!editing || editSaving) return;
+    if (!editForm || editSaving) return;
 
     setEditSaving(true);
     setEditErrors({});
@@ -152,12 +338,12 @@ export default function MenusPage() {
     try {
       const response = await api.post(
         "/menus/update",
-        editing,
+        editForm,
         { timeout: 15000 }
       );
 
       const updated = response.data.menu;
-
+      
       setMenus((current) =>
         current.map((menu) => {
           if (menu.id === updated.id) {
@@ -175,7 +361,7 @@ export default function MenusPage() {
         })
       );
 
-      setEditing(null);
+      setEditForm(null);
       handleToast("Menu updated.", "success");
     } catch (error) {
       const detail = error.response?.data?.detail;
@@ -443,7 +629,7 @@ export default function MenusPage() {
       </div>
     );
   };
-  console.log(editing)
+
   const renderGroup = (items, parentId = null) => (
     <>
       {items.map((menu, index) => (
@@ -471,144 +657,100 @@ export default function MenusPage() {
 
   return (
     <ContentPanel>
-      <section>
-        <header className="rounded-t-lg border border-skin-border bg-skin-panel px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="m-0 text-[15px] font-semibold text-skin-text">Menu order</h2>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-skin-accent-soft px-2 py-1 text-[10px] font-medium text-skin-accent" role="status">
-              <span className="h-1.5 w-1.5 rounded-full bg-skin-accent" aria-hidden="true" />
-              {saving ? "Saving..." : "Active menus"}
-            </span>
-          </div>
-          <p className="m-0 mt-1 text-xs leading-relaxed text-skin-dim">
-            Drag to reorder. Move right to nest a menu without children.
-          </p>
-        </header>
-        <div className="flex flex-col rounded-b-lg border border-t-0 border-skin-border bg-skin-bg p-3" aria-busy={saving}>
-          {menus.length === 0 ? (
-            <p className="m-0 py-6 text-center text-[13px] text-skin-dim">
-              No active menus yet.
+      <section className="flex-row md:flex gap-3">
+        <div className="w-full">
+          <header className="rounded-t-lg border border-skin-border bg-skin-panel px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="m-0 text-[15px] font-semibold text-skin-text">Menu order</h2>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-skin-accent-soft px-2 py-1 text-[10px] font-medium text-skin-accent" role="status">
+                <span className="h-1.5 w-1.5 rounded-full bg-skin-accent" aria-hidden="true" />
+                {saving ? "Saving..." : "Active menus"}
+              </span>
+            </div>
+            <p className="m-0 mt-1 text-xs leading-relaxed text-skin-dim">
+              Drag to reorder. Move right to nest a menu without children.
             </p>
-          ) : (
-            renderGroup(menus)
-          )}
+          </header>
+          <div className="flex flex-col rounded-b-lg border border-t-0 border-skin-border bg-skin-bg p-3" aria-busy={saving}>
+            {menus.length === 0 ? (
+              <p className="m-0 py-6 text-center text-[13px] text-skin-dim">
+                No active menus yet.
+              </p>
+            ) : (
+              renderGroup(menus)
+            )}
+          </div>
+        </div>
+        <div className="w-full">
+          <header className="rounded-t-lg border border-skin-border bg-skin-panel px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="m-0 text-[15px] font-semibold text-skin-text">Add menu</h2>
+            </div>
+          </header>
+          <div className="flex flex-col rounded-b-lg border border-t-0 border-skin-border bg-skin-bg p-3">
+            <form className="space-y-4" onSubmit={saveAdd}>
+              <MenuFormFields
+                form={addForm}
+                setForm={setAddForm}
+                errors={addErrors}
+                setErrors={setAddErrors}
+                roles={roles}
+                idPrefix="menu-add"
+                autoFocusName
+              />
+
+              <div className="flex justify-end gap-2 border-t border-skin-border pt-4">
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    setAddForm({ ...EMPTY_MENU_FORM });
+                    setAddErrors({});
+                  }}
+                  className="rounded-md border border-skin-border px-3 py-2 text-sm text-skin-text disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="rounded-md bg-skin-accent-soft px-3 py-2 text-sm font-semibold text-skin-accent disabled:opacity-50"
+                >
+                  {loading ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </section>
+
       <Modal
-        show={editing !== null}
+        show={editForm !== null}
         title="Edit menu"
         dismissible={!editSaving}
         onClose={() => {
-          if (!editSaving) setEditing(null);
+          if (!editSaving) setEditForm(null);
         }}
       >
-        {editing && (
+        {editForm && (
           <form onSubmit={saveEdit} className="space-y-4">
-            {[
-              ["roles", "Roles"],
-              ["name", "Menu name"],
-              ["path", "Path"],
-              ["icon", "Icon class"],
-              ["type", "Type"]
-              
-            ].map(([field, label]) => (
-              <div key={field} className="space-y-1.5">
-                <label
-                  htmlFor={`menu-edit-${field}`}
-                  className="block text-xs text-skin-dim"
-                >
-                  {label}
-                </label>
-
-                {
-                  (['roles','type']).includes(field) ? (
-                    <>
-                      {
-                        field === 'roles' ?
-                        <SelectInput
-                          type="react-select"
-                          value={roles.filter((option) =>
-                            (editing.roles ?? []).some(
-                              (role) => role.id === option.value
-                            )
-                          )}
-                          options={roles}
-                          placeholder="Choose roles"
-                          onChange={(selected) => {
-                            setEditing((current) => ({
-                              ...current,
-                              roles: (selected ?? []).map((option) => ({
-                                id: option.value,
-                                name: option.label,
-                              })),
-                            }));
-  
-                            setEditErrors((current) => ({
-                              ...current,
-                              roles: "",
-                            }));
-                          }}
-                          disabled={editSaving}
-                          isMulti
-                        />
-                          :
-                        <SelectInput
-                          type="react-select"
-                          value={TYPES.filter((option) => editing.type === option.value)}
-                          options={TYPES}
-                          placeholder="Choose Type"
-                          onChange={(selected) => {
-                            setEditing((current) => ({
-                              ...current,
-                              type: selected.value,
-                            }));
-
-                            setEditErrors((current) => ({
-                              ...current,
-                              type: "",
-                            }));
-                          }}
-                          disabled={editSaving}
-                        />
-                      }
-
-                    </>
-                  ) 
-                  : 
-                  <TextInput
-                    id={`menu-edit-${field}`}
-                    value={editing[field]}
-                    required={field === "name"}
-                    maxLength={255}
-                    disabled={editSaving}
-                    autoFocus={field === "name"}
-                    aria-invalid={Boolean(editErrors[field])}
-                    onChange={(event) => {
-                      const value = event.target.value;
-  
-                      setEditing((current) => ({
-                        ...current,
-                        [field]: value,
-                      }));
-  
-                      setEditErrors((current) => ({
-                        ...current,
-                        [field]:'',
-                      }));
-                    }}
-                  />
-                }
-                
-
-                <InputError message={editErrors[field]} />
-              </div>
-            ))}
+            <MenuFormFields
+              form={editForm}
+              setForm={setEditForm}
+              errors={editErrors}
+              setErrors={setEditErrors}
+              roles={roles}
+              disabled={editSaving}
+              idPrefix="menu-edit"
+              autoFocusName
+            />
 
             <div className="flex justify-end gap-2 border-t border-skin-border pt-4">
               <button
                 type="button"
                 disabled={editSaving}
-                onClick={() => setEditing(null)}
+                onClick={() => setEditForm(null)}
                 className="rounded-md border border-skin-border px-3 py-2 text-sm text-skin-text disabled:opacity-50"
               >
                 Cancel
