@@ -38,7 +38,7 @@ const EMPTY_MENU_FORM = {
   roles: [],
   type: "",
   slug: "",
-  is_status: "",
+  is_active: "",
 
 };
 
@@ -49,7 +49,7 @@ const MENU_FIELDS = [
   ["icon", "Icon class"],
   ["type", "Type"],
   ["slug", "Slug"],
-  ["is_status", "Active"],
+  ["is_active", "Active"],
 ];
 
 function MenuFormFields({
@@ -113,20 +113,20 @@ function MenuFormFields({
             }}
             disabled={disabled}
           />
-        ) : field === "is_status" ? (
+        ) : field === "is_active" ? (
           <SelectInput
             id={inputId}
             type="react-select"
-            value={STATUSES.find((option) => option.value === form.is_status) ?? null}
+            value={STATUSES.find((option) => option.value === form.is_active) ?? null}
             options={STATUSES}
             placeholder="Choose Status"
             onChange={(selected) => {
               setForm((current) => ({
                 ...current,
-                is_status: selected?.value ?? "",
+                is_active: selected?.value ?? "",
               }));
 
-              setErrors((current) => ({ ...current, is_status: "" }));
+              setErrors((current) => ({ ...current, is_active: "" }));
             }}
             disabled={disabled}
           />
@@ -215,6 +215,7 @@ export default function MenusPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [menus, setMenus] = useState([]);
+  const [inActiveMenus, setInActiveMenus] = useState([]);
   const dragFrom = useRef(null);
   const savePending = useRef(false);
   const [saving, setSaving] = useState(false);
@@ -245,6 +246,7 @@ export default function MenusPage() {
         try {
           const response = await api.get("/menus", { timeout: 10000 });
           setMenus(response.data.menus);
+          setInActiveMenus(response.data.inactive_menus);
           handleToast("The save timed out. Menu order was refreshed; you can drag again.", "warning");
         } catch {
           setError("The menu server is not responding. Refresh this page once it is available.");
@@ -252,7 +254,7 @@ export default function MenusPage() {
         return;
       }
       setMenus(previous);
-
+      setInActiveMenus(previous);
       const detail = error.response?.data?.detail;
       handleToast(
         typeof detail === "string"
@@ -276,7 +278,7 @@ export default function MenusPage() {
       icon: menu.icon ?? "",
       roles: menu.roles ?? [],
       type: menu.type ?? "",
-      is_status: menu.is_active ?? "",
+      is_active: menu.is_active ?? "",
       is_dashboard: menu.is_dashboard ?? "",
     });
   };
@@ -361,6 +363,23 @@ export default function MenusPage() {
         })
       );
 
+      setInActiveMenus((current) =>
+        current.map((menu) => {
+          if (menu.id === updated.id) {
+            return { ...menu, ...updated };
+          }
+
+          return {
+            ...menu,
+            children: (menu.children ?? []).map((child) =>
+              child.id === updated.id
+                ? { ...child, ...updated }
+                : child
+            ),
+          };
+        })
+      );
+
       setEditForm(null);
       handleToast("Menu updated.", "success");
     } catch (error) {
@@ -387,6 +406,7 @@ export default function MenusPage() {
       .then((res) => {
         setData(res.data);
         setMenus(res.data.menus);
+        setInActiveMenus(res.data.inactive_menus);
       })
       .catch(() => setError("Could not load menus."));
   }, []);
@@ -659,26 +679,51 @@ export default function MenusPage() {
     <ContentPanel>
       <section className="flex-row md:flex gap-3">
         <div className="w-full">
-          <header className="rounded-t-lg border border-skin-border bg-skin-panel px-4 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="m-0 text-[15px] font-semibold text-skin-text">Menu order</h2>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-skin-accent-soft px-2 py-1 text-[10px] font-medium text-skin-accent" role="status">
-                <span className="h-1.5 w-1.5 rounded-full bg-skin-accent" aria-hidden="true" />
-                {saving ? "Saving..." : "Active menus"}
-              </span>
-            </div>
-            <p className="m-0 mt-1 text-xs leading-relaxed text-skin-dim">
-              Drag to reorder. Move right to nest a menu without children.
-            </p>
-          </header>
-          <div className="flex flex-col rounded-b-lg border border-t-0 border-skin-border bg-skin-bg p-3" aria-busy={saving}>
-            {menus.length === 0 ? (
-              <p className="m-0 py-6 text-center text-[13px] text-skin-dim">
-                No active menus yet.
+          <div className="mb-2">
+            <header className="rounded-t-lg border border-skin-border bg-skin-panel px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="m-0 text-[15px] font-semibold text-skin-text">Menu order</h2>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-skin-accent-soft px-2 py-1 text-[10px] font-medium text-skin-accent" role="status">
+                  <span className="h-1.5 w-1.5 rounded-full bg-skin-accent" aria-hidden="true" />
+                  {saving ? "Saving..." : "Active menus"}
+                </span>
+              </div>
+              <p className="m-0 mt-1 text-xs leading-relaxed text-skin-dim">
+                Drag to reorder. Move right to nest a menu without children.
               </p>
-            ) : (
-              renderGroup(menus)
-            )}
+            </header>
+            <div className="flex flex-col rounded-b-lg border border-t-0 border-skin-border bg-skin-bg p-3" aria-busy={saving}>
+              {menus.length === 0 ? (
+                <p className="m-0 py-6 text-center text-[13px] text-skin-dim">
+                  No active menus yet.
+                </p>
+              ) : (
+                renderGroup(menus)
+              )}
+            </div>
+          </div>
+          <div className="mt-2">
+            <header className="rounded-t-lg border border-skin-border bg-skin-panel px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="m-0 text-[15px] font-semibold text-skin-text">Menu order</h2>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-skin-danger-soft px-2 py-1 text-[10px] font-medium text-skin-danger" role="status">
+                  <span className="h-1.5 w-1.5 rounded-full bg-skin-danger" aria-hidden="true" />
+                  {saving ? "Saving..." : "In Active menus"}
+                </span>
+              </div>
+              <p className="m-0 mt-1 text-xs leading-relaxed text-skin-dim">
+                Drag to reorder. Move right to nest a menu without children.
+              </p>
+            </header>
+            <div className="flex flex-col rounded-b-lg border border-t-0 border-skin-border bg-skin-bg p-3" aria-busy={saving}>
+              {inActiveMenus.length === 0 ? (
+                <p className="m-0 py-6 text-center text-[13px] text-skin-dim">
+                  No In active menus yet.
+                </p>
+              ) : (
+                renderGroup(inActiveMenus)
+              )}
+            </div>
           </div>
         </div>
         <div className="w-full">
