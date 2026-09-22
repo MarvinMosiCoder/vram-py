@@ -1,0 +1,51 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Poppins:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+@theme inline {
+  --font-body: "Poppins", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --color-skin-custom: var(--app-theme-color);
+  --color-theme-contrast: var(--app-theme-contrast);
+  --color-skin-danger-soft: var(--danger-soft);
+
+  --color-skin-bg:          var(--bg);
+  --color-skin-panel:       var(--panel);
+  --color-skin-border:      var(--panel-border);
+  --color-skin-text:        var(--text);
+  --color-skin-dim:         var(--text-dim);
+  --color-skin-accent:      var(--accent);
+  --color-skin-accent-dim:  var(--accent-dim);
+  --color-skin-accent-soft: var(--accent-soft);
+  --color-skin-danger:      var(--danger);
+  --color-black-table-color: var(--panel);
+}
+
+.login-theme {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --panel-border: #262b35;
+  --text: #e7e6e1;
+  --text-dim: #c1c7d5;
+  --app-theme-color: #3ecf8e;
+  --app-theme-contrast: #0b0d10;
+  --app-theme-readable: #2a8f63;
+  --app-theme-light: #9ee7c6;
+  --app-theme-soft: rgba(62, 207, 142, 0.10);
+  --app-theme-soft-strong: rgba(62, 207, 142, 0.18);
+  --app-theme-border: rgba(62, 207, 142, 0.34);
+  --app-theme-deep: rgba(62, 207, 142, 0.28);
+  --accent: var(--app-theme-color);
+  --accent-dim: var(--app-theme-readable);
+  --accent-soft: var(--app-theme-soft-strong);
+  --danger: #e2665a;
+  --danger-soft: rgba(226, 102, 90, 0.14);
+  color: var(--text);
+}
+
+
+body {
+  margin: 0;
+  background: #0f1115;
+  color: #e7e6e1;
+  font-family: "Poppins", system-ui, sans-serif;
+}

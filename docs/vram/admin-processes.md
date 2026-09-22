@@ -127,8 +127,8 @@ menu row: `/user_sidebar` keeps only menus whose id appears in that table for th
 caller's role. This is Laravel's `adm_menus_privileges`, renamed because
 `privileges` in this port already means the module permission flags in
 `adm_roles_privileges` - a different relationship with a different grain.
-`adm_menuses.id_adm_role` still exists and still holds the pre-pivot value, but
-nothing reads it; it is scheduled for removal once the menu screen is complete.
+`adm_menuses.id_adm_role` remains as a legacy column; new menus set it to 1.
+Sidebar visibility reads the pivot rather than this column.
 
 A menu is top level when `parent_id` is `NULL`. Laravel writes `0` for the same
 thing, so porting that literally empties the sidebar with no error.
@@ -148,9 +148,11 @@ each with a one-level `children` list and a `roles` list of `{id, name}`), and
 renders it; the file's own path is its registration, through the
 `import.meta.glob` in `modulePages.js`.
 
-Listing, reordering, and moves between top-level and child groups are implemented.
-The pencil now opens an edit modal, but saving edits is unfinished; see
-[editing menus](#editing-menus-in-progress). Create and delete remain unwritten.
+Listing, creation, editing, role assignment, reordering, and moves between
+top-level and child groups are implemented. The page shows active and inactive
+sections alongside an Add menu form; the pencil opens an edit modal. Delete is
+disabled. See [creating and editing menus](#creating-and-editing-menus) for save
+behavior and the remaining UI limitations.
 
 ### Reordering
 
@@ -192,63 +194,80 @@ Its menu type is limited to `Route` and `URL`, matching the current Laravel
 form. `CommonHelpers::sidebarMenu()` also resolves `Module`, `Statistic` and
 `Controller & Method`, which come from the application Laravel was itself ported
 from; this port implements none of them, and `UserSidebar.jsx` does not yet
-branch on type at all - it builds an internal path for every menu, so a `URL`
-menu would not resolve correctly.
+handle external URLs - it uses type to choose a link or child group, but builds
+internal paths for links, so a `URL` menu would not resolve correctly.
 
-### Editing menus (in progress)
+### Creating and editing menus
 
-The pencil on both parent and child cards calls `openEdit(menu)`. It copies the
-record into `editing` rather than modifying the displayed menu. The shared
-`Modal`, `TextInput`, `SelectInput`, and `InputError` components render roles,
-name, path, icon class, and type (`Route` or `URL`). Select fields replace the
-text input for that field; rendering both would let the text input overwrite
-the roles array with a string. Cancel discards the draft.
+The Add menu form and edit modal share `MenuFormFields`, built with `TextInput`,
+`SelectInput`, and `InputError`. Both expose roles, name, path, icon class, type
+(`Route` or `URL`), slug, and Active (`1` for ACTIVE, `0` for INACTIVE). Name is
+required by the browser. Choose an explicit status when adding: the initial
+form sends an empty string, which does not trigger the backend's default of 1.
 
-`openEdit` also copies `status` from `is_active` and copies `is_dashboard`, but
-the current modal has no controls for either. `slug` is serialized by the API
-but is not included in the edit draft. This is not yet the full Laravel edit
-workflow.
+The pencil copies the selected record into `editForm`; cancel discards the draft.
+Although the modal shows a slug input, `openEdit` does not copy the existing slug,
+so it initially appears blank. Leaving it untouched omits it from the update;
+changing it sends the new value. `is_dashboard` is copied but has no form control.
 
 #### Role options and selected roles
 
-The page loads options through a separate authenticated `GET /menus/roles`
-request. `get_roles` is decorated with `@action`, so it is a dynamic endpoint,
-not just a helper. It sorts all roles by name and returns an array directly.
-It currently adds no module capability check of its own beyond the route's
-authentication. The list action `get_index` does check view capability.
+Both list requests run on mount; either failure shows "Could not load menus".
+`GET /menus` checks view capability. The separate authenticated
+`GET /menus/roles` sorts all roles by name and has no additional capability check.
 
 | Source | Shape | Frontend use |
 | --- | --- | --- |
-| `GET /menus` | Object with `roles: [{value, label}]` | `res.data.roles` |
-| `GET /menus/roles` | `[{value, label}]` | `setRoles(res.data ?? [])` |
-| Each menu's `roles` | `[{id, name}]` | Assigned roles copied into `editing.roles` |
+| `GET /menus` | Object with `roles: [{value, label}]` | Included in page data |
+| `GET /menus/roles` | `[{value, label}]` | Populates selector options directly |
+| Each listed menu's `roles` | `[{id, name}]` | Copied into the edit draft |
 
-Reading `res.data.roles` from `/menus/roles` produces `undefined`; the `?? []`
-fallback then silently empties the options. Keep the response shapes distinct.
-Both list requests currently run on mount; either failure shows the page's
-generic "Could not load menus" error.
+The multi-select matches IDs as strings and maps selections back to `{id, name}`.
+Empty selection becomes `[]`. Role visibility is saved in `adm_menus_roles`.
 
-The roles selector uses `isMulti`. Its `value` filters option objects by matching
-`option.value` to `editing.roles[].id`. On change, selected options are mapped
-back to `{id: option.value, name: option.label}`. Empty selection becomes `[]`.
-Role visibility belongs in `adm_menus_roles`; the old `id_adm_role` column is
-not the assignment mechanism.
+#### Save contracts
 
-#### Save boundary
+Both saves use a 15-second timeout and return `{message, status, menu}` on success.
+The `menu` is an ORM row encoded by FastAPI, not the enriched `_serialize()`
+result used by the list endpoint: it does not include `roles` or `children`.
 
-`saveEdit` posts the draft to `/menus/update` with a 15-second timeout. The
-client expects `{menu: <updated serialized menu>}`, then replaces the matching
-parent or child card, closes the modal, and shows a success toast. Field errors
-are read from an object in `detail`. Inputs, submission, and modal dismissal
-are disabled while the request is pending.
+`POST /menus/add` checks create capability and accepts `name`, `type`, `path`,
+`slug`, `icon`, `is_active`, and `roles` (objects with an `id`). It rejects an
+existing exact name with HTTP 400 and `detail: {message, status}`. It creates a
+top-level menu (`parent_id` remains null), forces `is_dashboard = 0` and the
+legacy `id_adm_role = 1`, and inserts role assignments in the same transaction.
+It does not assign `sorting`; reorder afterwards to establish its position.
+Insert failures roll back and return HTTP 500 with a message in `detail`.
 
-**The current backend does not save edits.** `post_update` checks update
-capability, reads `id` and `roles`, then calls `common_helpers.dd(roles)`.
-The `DumpAndDie` handler in `app/main.py` returns HTTP 500 with `{"__dd__": ...}`.
-No edit validation, record update, role-pivot synchronization, or commit exists
-in this method yet. The frontend's expected success response is therefore a
-pending contract, not an implemented API result. Removing the debug call alone
-does not implement saving.
+`POST /menus/update` checks update capability and requires the menu `id`.
+A missing record returns HTTP 422. It applies supplied attributes that exist on
+the model, excluding `id` and `roles`, then adds/removes pivot rows to match the
+submitted role IDs and commits. Omitting `roles` clears all assignments. This is
+not a validated field allowlist: the handler does not enforce required fields,
+unique names, allowed type/status values, or role payload structure. Existing
+capability-helper limitations still apply to both writes.
+
+On success, Add resets its form and appends the returned row to the active list;
+Edit merges the returned row into the existing active/inactive card and closes
+the modal. Both show a success toast. Object-shaped `detail` errors are retained
+for field messages, with `detail.message` used for the toast. Edit inputs and
+modal dismissal are disabled while saving; Add disables its buttons but leaves
+its fields editable.
+
+#### Current UI limitations
+
+- Reload after saving to refresh role labels and active/inactive placement. Save
+  responses omit roles, and the page does not refetch or move cards between
+  sections after a status change; even a new inactive menu is appended to active
+  menus until reload. The sidebar also fetches only on mount.
+- The inactive section contains only top-level rows, without children. Inactive
+  children are excluded from the active tree and are not listed separately.
+- Inactive cards reuse drag controls, but those handlers index the active tree.
+  Dragging them can target an active menu instead. Inactive reordering is not
+  supported by `/menus/move`; use dragging only in the active section. A failed
+  move also assigns the active rollback snapshot to the inactive list; reload
+  to restore that display.
+- Delete has no menu-management UI and is disabled in controller actions.
 
 ## Availability
 
@@ -258,7 +277,7 @@ does not implement saving.
 | Profile | Implemented API and `/profile` page; see [profile guide](profile-navbar.md) |
 | Change password | Implemented API and `/change-password` page, with history reuse checks |
 | Forced password change | Implemented policy endpoint, waiver endpoint and client gate; the gate is a prompt, not server enforcement |
-| Menu management | Listing, role options, sibling ordering, promotion, nesting of menus without children, and cross-parent child moves are implemented. The pencil opens an edit modal, but `post_update` stops at a debug dump and does not save. Create/delete remain unwritten |
+| Menu management | Listing, role options, sibling ordering, promotion, nesting of menus without children, and cross-parent child moves are implemented. Creation, editing, and role-pivot saves are implemented; status/role display refresh and inactive dragging have limitations described above. Delete is disabled |
 | Notifications module | Registered demonstration actions; not a complete inbox or generated CRUD payload |
 | Module generator | Python `generate()` helper exists; no registered ModulesController admin screen |
 | Settings, API generator, email templates, statistics builder, logs | Seeded entries do not imply implemented controllers |

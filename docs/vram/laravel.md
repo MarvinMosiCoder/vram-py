@@ -51,8 +51,10 @@ Original application: `C:/laragon/www/vram`. Original documentation:
   this port's frontend.
 - Menu editing opens a modal in this port. Laravel's `editMenu` renders
   `MenuManagementEdit`, and `updateMenu` persists menu fields and role assignments.
-  This port's modal is present, but its `post_update` still stops at a debug
-  dump; see [edit status](admin-processes.md#editing-menus-in-progress).
+  This port now persists fields and role assignments through `post_update`,
+  and creates menus through `post_add`. See
+  [save contracts](admin-processes.md#save-contracts) for response differences
+  and remaining UI limitations.
 - Laravel's forced password change runs from a session flag set in
   `LoginController` and a middleware that redirects; this port computes the
   same decision server-side and serves it from `GET /password-policy`. See

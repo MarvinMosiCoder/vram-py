@@ -2,11 +2,22 @@
 
 ## Unreleased
 
+- Synced documentation with menu-management changes through `e8c660d`: creation
+  and edit saves now persist menu rows and role assignments, with shared form
+  fields and an inactive section. Replaced the debug-stub availability claim
+  and documented actual response shapes, validation gaps, and remaining role,
+  status, slug, and inactive-drag UI limitations. Aligned local startup and API
+  documentation with the shared client's hardcoded port 8080. Verified by source
+  inspection and local documentation link checks; no browser or database
+  mutations were exercised for this documentation-only update.
+
+### Earlier changes
+
 - Documented the menu edit modal, its role multi-select and Route/URL selector,
   and the separate `/menus/roles` options endpoint. Recorded the direct-array
   response fix (`res.data`, not `res.data.roles`) and the distinction between
   `{value, label}` options and `{id, name}` assignments. Corrected availability:
-  the pencil opens a draft, but `post_update` currently returns a debug dump
+  at that point the pencil opened a draft, but `post_update` returned a debug dump
   instead of saving fields or role assignments. Verified against current source;
   this documentation update did not exercise browser editing or API mutations.
 

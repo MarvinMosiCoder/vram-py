@@ -1,6 +1,7 @@
 # API reference
 
-The development backend normally runs at `http://localhost:8000`. Its `/docs`
+The shared frontend client currently targets `http://localhost:8080`; use the
+matching backend port in [operations](operations.md). Its `/docs`
 and `/openapi.json` expose current static endpoint schemas. Dynamic controllers
 accept bodies through a shared dispatcher, so their field metadata is the
 additional contract for module requests.
@@ -56,10 +57,18 @@ These routes require authentication; capability checks belong to handlers.
 
 Menu management uses custom actions rather than the generated CRUD contract.
 `GET /menus/roles` returns a direct options array, while `GET /menus` embeds
-options in its `roles` property. `POST /menus/move` persists menu placement;
-`POST /menus/update` is currently a debug stub and does not persist edits.
-See [menu management](admin-processes.md#menu-management) for the contracts,
-access checks, and [edit status](admin-processes.md#editing-menus-in-progress).
+options in its `roles` property.
+
+| Method/path | Body or result |
+| --- | --- |
+| `POST /menus/add` | Menu fields and `roles: [{id, name}]`; checks create capability |
+| `POST /menus/update` | Menu `id`, updated fields, and desired `roles`; checks update capability |
+| `POST /menus/move` | `{menu_id, parent_id, ids}`; checks update capability and persists active-menu placement |
+
+Add/update return `{message, status, menu}` with a plain menu row, without the
+list endpoint's role and child enrichment. Move returns `{message, status}`.
+See [menu management](admin-processes.md#menu-management) for list shapes and
+[save contracts](admin-processes.md#save-contracts) for validation and limitations.
 
 ## List query parameters
 

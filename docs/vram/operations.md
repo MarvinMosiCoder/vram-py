@@ -23,7 +23,7 @@ python -m venv venv
 pip install -r requirements.txt
 alembic upgrade head
 python seed.py
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8080
 ```
 
 From `frontend/`:
@@ -45,9 +45,13 @@ requests, never for judging a reply. See [stub mode](ai-chat.md#stub-mode).
 use Docker, WSL, or a hosted instance. Left unset, the chat rate limiter and
 response cache stay in process memory and no Redis is required.
 
-Vite normally serves port 5173; FastAPI serves 8000 and exposes interactive API
-reference at `/docs`. Inspect configuration rather than assuming a deployed
-instance uses the same addresses or credentials.
+Vite normally serves port 5173. The command above serves FastAPI on 8080 to match
+`frontend/src/api.js`, whose Axios `baseURL` is currently hardcoded to
+`http://localhost:8080`. Interactive API reference is at
+`http://localhost:8080/docs`. Uvicorn without `--port` defaults to 8000; keep the
+server port and client URL aligned. The shared client does not currently read
+`VITE_API_URL` (shown as port 8000 in `frontend/.env.example`). Inspect configuration rather than
+assuming a deployed instance uses the same addresses or credentials.
 
 ## Data maintenance
 
