@@ -1,0 +1,120 @@
+// Role palettes shared by the Next.js admin shell and its CSS theme tokens.
+
+export const SYSTEM_THEME_ID = 'system';
+
+export const namedThemeOptions = [
+    { id: 'skin-blue', name: 'Blue', hex: '#134B70' },
+    { id: 'skin-blue-light', name: 'Light Blue', hex: '#508C9B' },
+    { id: 'skin-green', name: 'Green', hex: '#00A65A' },
+    { id: 'skin-green-light', name: 'Light Green', hex: '#508D4E' },
+    { id: 'skin-yellow', name: 'Yellow', hex: '#E08E0B' },
+    { id: 'skin-yellow-light', name: 'Light Yellow', hex: '#FFB200' },
+    { id: 'skin-purple', name: 'Purple', hex: '#BC5A94' },
+    { id: 'skin-purple-light', name: 'Light Purple', hex: '#F075AA' },
+    { id: 'skin-red', name: 'Red', hex: '#DD4B39' },
+    { id: 'skin-red-light', name: 'Light Red', hex: '#E72929' },
+    { id: 'skin-black', name: 'Black', hex: '#242627' },
+    { id: 'skin-black-light', name: 'Soft Black', hex: '#31363F' },
+    { id: 'skin-white', name: 'White', hex: '#FFFFFF' },
+];
+
+export const dashboardThemeOptions = [
+    { id: 'skin-palette-blue', name: 'Blue', hex: '#3B82F6' },
+    { id: 'skin-palette-indigo', name: 'Indigo', hex: '#6366F1' },
+    { id: 'skin-palette-violet', name: 'Violet', hex: '#8B5CF6' },
+    { id: 'skin-palette-purple', name: 'Purple', hex: '#A855F7' },
+    { id: 'skin-palette-fuchsia', name: 'Fuchsia', hex: '#D946EF' },
+    { id: 'skin-palette-pink', name: 'Pink', hex: '#EC4899' },
+    { id: 'skin-palette-rose', name: 'Rose', hex: '#F43F5E' },
+    { id: 'skin-palette-red', name: 'Red', hex: '#EF4444' },
+    { id: 'skin-palette-orange', name: 'Orange', hex: '#F97316' },
+    { id: 'skin-palette-amber', name: 'Amber', hex: '#F59E0B' },
+    { id: 'skin-palette-yellow', name: 'Yellow', hex: '#EAB308' },
+    { id: 'skin-palette-lime', name: 'Lime', hex: '#84CC16' },
+    { id: 'skin-palette-emerald', name: 'Emerald', hex: '#10B981' },
+    { id: 'skin-palette-teal', name: 'Teal', hex: '#14B8A6' },
+    { id: 'skin-palette-cyan', name: 'Cyan', hex: '#06B6D4' },
+    { id: 'skin-palette-sky', name: 'Sky', hex: '#0EA5E9' },
+    { id: 'skin-palette-slate', name: 'Slate', hex: '#64748B' },
+];
+
+export const personalThemeOptions = [
+    namedThemeOptions.find(({ id }) => id === 'skin-white'),
+    namedThemeOptions.find(({ id }) => id === 'skin-black'),
+    ...dashboardThemeOptions,
+];
+
+const allThemeOptions = [...namedThemeOptions, ...dashboardThemeOptions];
+const supportedThemeIds = new Set(allThemeOptions.map(({ id }) => id));
+const themeHexById: Record<string, string> = Object.fromEntries(allThemeOptions.map(({ id, hex }) => [id, hex]));
+const customHexPattern = /^#[0-9A-Fa-f]{6}$/;
+
+export const isCustomThemeColor = (value?: string | null) => customHexPattern.test(value || '');
+
+export const normalizeThemePreference = (preference?: string | null) => {
+    // Older role creation prefixed named skins with '#'. Read those values
+    // compatibly so existing roles recover without rewriting the database.
+    const value = typeof preference === 'string' ? preference.trim().replace(/^#(?=skin-)/, '') : '';
+    return supportedThemeIds.has(value) || isCustomThemeColor(value) ? value : SYSTEM_THEME_ID;
+};
+
+export const resolveThemeColor = (preference?: string | null, systemTheme = 'skin-blue') => {
+    const normalizedSystemTheme = supportedThemeIds.has(systemTheme) ? systemTheme : 'skin-blue';
+    const normalized = normalizeThemePreference(preference);
+    return normalized === SYSTEM_THEME_ID ? normalizedSystemTheme : normalized;
+};
+
+// Returns the `bg-skin-*` spelling every consumer compares against --
+// ThemeContext strips the `bg-` prefix, while RowData, AppContent and
+// AppFooter compare the whole string.
+export const getThemeClass = (themeColor?: string | null) => {
+    const resolvedTheme = resolveThemeColor(themeColor);
+    return isCustomThemeColor(resolvedTheme) ? 'bg-skin-custom' : `bg-${resolvedTheme}`;
+};
+
+export const getThemeHex = (themeClassOrId?: string | null) =>
+    isCustomThemeColor(themeClassOrId) ? (themeClassOrId ?? "").toUpperCase() : themeHexById[themeClassOrId?.replace(/^bg-/, '') ?? ''];
+
+export const isDashboardPaletteTheme = (themeClassOrId?: string | null) =>
+    themeClassOrId?.replace(/^bg-/, '').startsWith('skin-palette-');
+
+// Standard YIQ perceptual brightness formula picks a readable black/white
+// foreground, then derives the rest of the palette (a "readable" darker
+// accent for hover/active states, a lightened tint, and translucent
+// soft/border/deep variants for tinted cards and badges) so every consumer
+// reads from the same set of CSS custom properties.
+export const applyThemeColor = (themeColor?: string | null) => {
+    if (typeof document === 'undefined') return;
+    const isDark = resolveThemeColor(themeColor?.replace(/^bg-/, '')) === 'skin-black';
+    // Keep the black skin identity while giving its controls the login accent.
+    const hex = isDark ? '#3ECF8E' : getThemeHex(themeColor) || getThemeHex(resolveThemeColor(themeColor));
+    if (!hex) return;
+    const red = parseInt(hex.slice(1, 3), 16);
+    const green = parseInt(hex.slice(3, 5), 16);
+    const blue = parseInt(hex.slice(5, 7), 16);
+    const foreground = isDark ? '#0B0D10' : ((red * 299 + green * 587 + blue * 114) / 1000) >= 155 ? '#111827' : '#FFFFFF';
+    const readable = isDark ? hex : ((red * 299 + green * 587 + blue * 114) / 1000) >= 145
+        ? `rgb(${Math.round(red * 0.62)}, ${Math.round(green * 0.62)}, ${Math.round(blue * 0.62)})`
+        : hex;
+    const light = `rgb(${Math.round(red + (255 - red) * 0.5)}, ${Math.round(green + (255 - green) * 0.5)}, ${Math.round(blue + (255 - blue) * 0.5)})`;
+    document.documentElement.style.setProperty('--app-theme-color', hex);
+    document.documentElement.style.setProperty('--app-theme-contrast', foreground);
+    document.documentElement.style.setProperty('--app-theme-readable', readable);
+    document.documentElement.style.setProperty('--app-theme-light', light);
+    document.documentElement.style.setProperty('--app-theme-soft', `rgba(${red}, ${green}, ${blue}, 0.10)`);
+    document.documentElement.style.setProperty('--app-theme-soft-strong', `rgba(${red}, ${green}, ${blue}, 0.18)`);
+    document.documentElement.style.setProperty('--app-theme-border', `rgba(${red}, ${green}, ${blue}, 0.34)`);
+    document.documentElement.style.setProperty('--app-theme-deep', `rgba(${red}, ${green}, ${blue}, 0.28)`);
+
+    // Runtime colors consumed by Tailwind's theme utilities. Keep surfaces and
+    // accent tokens together so switching roles also resets light/dark colors.
+    const surfaces = isDark
+        ? { '--bg': '#0f1115', '--panel': '#171a21', '--panel-border': '#262b35', '--text': '#e7e6e1', '--text-dim': '#8a8f9c', '--danger': '#e2665a', '--danger-soft': 'rgba(226, 102, 90, 0.14)' }
+        : { '--bg': '#f3f4f6', '--panel': '#ffffff', '--panel-border': '#d1d5db', '--text': '#111827', '--text-dim': '#6b7280', '--danger': '#b42318', '--danger-soft': 'rgba(180, 35, 24, 0.12)' };
+    const accent = isDark ? 'var(--app-theme-color)' : 'var(--app-theme-readable)';
+    for (const [name, value] of Object.entries({ ...surfaces, '--accent': accent, '--accent-dim': isDark ? '#2a8f63' : accent, '--accent-soft': 'var(--app-theme-soft-strong)' })) {
+        document.documentElement.style.setProperty(name, value);
+    }
+};
+
+export default namedThemeOptions;

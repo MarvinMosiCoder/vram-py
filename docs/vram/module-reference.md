@@ -47,6 +47,10 @@ Only methods marked `@action` are routable.
 
 ## Frontend wrapper props
 
+These props describe the generated runtime in legacy `frontend/`. That runtime
+is not yet available in `frontend-next/`; see
+[migration status](frontend.md#migration-status).
+
 | Prop | Use |
 | --- | --- |
 | `modulePath`, `title` | Override routing source or heading |

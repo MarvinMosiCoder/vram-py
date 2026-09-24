@@ -1,5 +1,11 @@
 # Generated modules
 
+The backend generation workflow remains shared. Frontend routes, wrappers, and
+automatic page discovery below belong to legacy `frontend/`; the generated
+runtime and module screens have not been ported to `frontend-next/`. Creating a
+controller does not create a Next.js page. Target new frontend migration work
+in `frontend-next/` and track it in [migration status](frontend.md#migration-status).
+
 ## Add a module
 
 1. Define the database table/model and apply its Alembic migration.

@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local snapshot of backend-managed uploads; never commit user images.
+/public/images/profile/

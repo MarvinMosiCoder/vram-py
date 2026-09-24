@@ -1,5 +1,17 @@
 # Admin processes
 
+## Next.js migration coverage
+
+`frontend-next/` implements login, session restoration, the original dashboard
+cards, and the shared React admin shell with role themes, backend-loaded menus,
+and logout confirmation. AuthProvider fetches password policy and announcements,
+but their gates are not ported. Logout clears local state without calling the
+backend logout helper. Module pages remain in the Vite app.
+
+The workflows and availability table below describe legacy `frontend/` and the
+shared FastAPI backend. They do not establish Next.js screen availability.
+See [migration status](frontend.md#migration-status) for current coverage.
+
 ## Login and logout
 
 1. Open `/login` and enter email/password.

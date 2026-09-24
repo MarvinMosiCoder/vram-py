@@ -1,5 +1,11 @@
 # Profile and navbar
 
+The profile editor remains in legacy `frontend/`. The navbar and avatar display
+have been ported to `frontend-next/components/`, with a local image snapshot described
+in [operations](operations.md#nextjs-profile-images). The backend still stores
+images under the `frontend/public/` paths below; preserve those directories.
+See [migration status](frontend.md#migration-status).
+
 Open Profile from the navbar account dropdown or visit `/profile`.
 
 | Process | Request | Result |

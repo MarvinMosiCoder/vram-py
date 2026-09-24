@@ -67,7 +67,7 @@ The upgrade destroys that column's data, and `downgrade()` does not return it -
 it re-creates an empty column. Back up before applying.
 
 1. Remove the readers first. Search the column name across `backend/app/` and
-   `frontend/src/` before touching the model; a name that survives in controller
+   both `frontend-next/` and `frontend/src/` before touching the model; a name that survives in controller
    metadata or a Pydantic model outlives the column itself.
 2. Remove the model attribute, then generate and review.
 3. Check the generated `downgrade()`. Re-adding a `nullable=False` column to a

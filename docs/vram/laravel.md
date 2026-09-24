@@ -1,5 +1,9 @@
 # Laravel mapping
 
+Frontend paths in the mapping below refer to legacy `frontend/`. New frontend
+work targets `frontend-next/`; most mapped screens are still awaiting migration.
+See [migration status](frontend.md#migration-status).
+
 Original application: `C:/laragon/www/vram`. Original documentation:
 `C:/laragon/www/vram/docs/vram/`. Read both when porting a feature.
 
@@ -22,8 +26,10 @@ Original application: `C:/laragon/www/vram`. Original documentation:
 ## Contract differences
 
 - Laravel/Inertia carries page props and session identity together. This port
-  serves React separately, fetches JSON through Axios, and authenticates with JWT.
-- React Router plus `modulePages.js` replaces Inertia page resolution.
+  serves the frontend separately and authenticates with JWT. The Next.js app
+  uses fetch helpers; the legacy React app uses Axios.
+- Next.js uses App Router. Legacy React Router plus `modulePages.js` replaces
+  Inertia page resolution for admin screens that have not yet migrated.
 - SQLAlchemy models explicitly declare columns; database sessions and commits are
   explicit. Alembic replaces Artisan migrations; `seed.py` runs discovered seeders.
 - Python controller actions need `@action`; public method visibility alone does

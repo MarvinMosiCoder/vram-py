@@ -1,37 +1,44 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/context/authContext";
+import api from "@/lib/http";
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const { user, loading, logout } = useAuth();
-
+  const { user } = useAuth();
+  const [userCount, setUserCount] = useState<number | "Unavailable" | null>(null);
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [loading, user, router]);
+    // Only admins can call /admin/users — for anyone else this 403s,
+    // which we just quietly ignore so the card shows as locked.
+    if (user?.role_id == 1) {
+      api
+        .get<{ id: number }[]>("/admin/users")
+        .then((res) => setUserCount(res.data.length))
+        .catch(() => setUserCount("Unavailable"));
+    }
+  }, [user]);
 
-  if (loading || !user) {
-    return <p className="p-8">Loading your account...</p>;
-  }
-
-  function handleLogout() {
-    logout();
-    router.replace("/login");
-  }
+  const canEdit = user?.role_id == 1 || user?.role_id == 2;
+  const isAdmin = user?.role_id == 1;
 
   return (
-    <main className="p-8">
-      <h1 className="text-3xl font-bold">Dashboard</h1>
-      <p className="mt-4">Signed in as {user.email}</p>
-      <button
-        type="button"
-        onClick={handleLogout}
-        className="mt-6 rounded border px-4 py-2"
-      >
-        Log out
-      </button>
-    </main>
+    <div>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-4 p-7">
+        <div className="rounded-[10px] border border-skin-border bg-skin-panel p-5 [&_h3]:mb-1.5 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:text-skin-dim">
+          <h3>Your role</h3>
+          <div className="font-mono text-2xl">{user?.role_id}</div>
+        </div>
+
+        <div className={`rounded-[10px] border border-skin-border bg-skin-panel p-5 [&_h3]:mb-1.5 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:text-skin-dim ${canEdit ? "" : "opacity-40"}`}>
+          <h3>Content area</h3>
+          <div className="font-mono text-2xl">{canEdit ? "Open" : "Restricted"}</div>
+        </div>
+
+        <div className={`rounded-[10px] border border-skin-border bg-skin-panel p-5 [&_h3]:mb-1.5 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:text-skin-dim ${isAdmin ? "" : "opacity-40"}`}>
+          <h3>Total users</h3>
+          <div className="font-mono text-2xl">{isAdmin ? (userCount ?? "…") : "Admin only"}</div>
+        </div>
+      </div>
+    </div>
   );
 }

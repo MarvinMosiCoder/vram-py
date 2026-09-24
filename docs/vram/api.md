@@ -1,6 +1,7 @@
 # API reference
 
-The shared frontend client currently targets `http://localhost:8080`; use the
+The Next.js fetch helpers (`frontend-next/lib/api.ts`) and legacy Axios client
+(`frontend/src/api.js`) currently target `http://localhost:8080`; use the
 matching backend port in [operations](operations.md). Its `/docs`
 and `/openapi.json` expose current static endpoint schemas. Dynamic controllers
 accept bodies through a shared dispatcher, so their field metadata is the

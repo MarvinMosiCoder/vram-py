@@ -1,9 +1,44 @@
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Poppins:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
-@theme inline {
+@source inline("bg-skin-blue bg-skin-blue-light bg-skin-green bg-skin-green-light bg-skin-yellow bg-skin-yellow-light bg-skin-purple bg-skin-purple-light bg-skin-red bg-skin-red-light bg-skin-black bg-skin-black-light bg-skin-white bg-skin-palette-blue bg-skin-palette-indigo bg-skin-palette-violet bg-skin-palette-purple bg-skin-palette-fuchsia bg-skin-palette-pink bg-skin-palette-rose bg-skin-palette-red bg-skin-palette-orange bg-skin-palette-amber bg-skin-palette-yellow bg-skin-palette-lime bg-skin-palette-emerald bg-skin-palette-teal bg-skin-palette-cyan bg-skin-palette-sky bg-skin-palette-slate bg-skin-custom");
+
+@theme static {
+  --color-skin-blue: #134B70;
+  --color-skin-blue-light: #508C9B;
+  --color-skin-green: #00A65A;
+  --color-skin-green-light: #508D4E;
+  --color-skin-yellow: #E08E0B;
+  --color-skin-yellow-light: #FFB200;
+  --color-skin-purple: #BC5A94;
+  --color-skin-purple-light: #F075AA;
+  --color-skin-red: #DD4B39;
+  --color-skin-red-light: #E72929;
+  --color-skin-black: #242627;
+  --color-skin-black-light: #31363F;
+  --color-skin-white: #FFFFFF;
+  --color-skin-palette-blue: #3B82F6;
+  --color-skin-palette-indigo: #6366F1;
+  --color-skin-palette-violet: #8B5CF6;
+  --color-skin-palette-purple: #A855F7;
+  --color-skin-palette-fuchsia: #D946EF;
+  --color-skin-palette-pink: #EC4899;
+  --color-skin-palette-rose: #F43F5E;
+  --color-skin-palette-red: #EF4444;
+  --color-skin-palette-orange: #F97316;
+  --color-skin-palette-amber: #F59E0B;
+  --color-skin-palette-yellow: #EAB308;
+  --color-skin-palette-lime: #84CC16;
+  --color-skin-palette-emerald: #10B981;
+  --color-skin-palette-teal: #14B8A6;
+  --color-skin-palette-cyan: #06B6D4;
+  --color-skin-palette-sky: #0EA5E9;
+  --color-skin-palette-slate: #64748B;
   --font-body: "Poppins", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
+}
+
+@theme inline {
   --color-skin-custom: var(--app-theme-color);
   --color-theme-contrast: var(--app-theme-contrast);
   --color-skin-danger-soft: var(--danger-soft);
@@ -20,6 +55,20 @@
   --color-black-table-color: var(--panel);
 }
 
+/* The themed ground and text colour for everything that does not paint its
+   own. Without this an element with no text colour falls back to the browser
+   default black, which disappears against the black theme's charcoal panels --
+   modal and panel headings inherited rather than declared a colour. Scoped
+   palettes such as .login-theme still override it, since they redefine --text
+   and --bg on themselves. */
+body {
+  margin: 0;
+  background-color: var(--bg, #0f1115);
+  color: var(--text, #e7e6e1);
+  font-family: "Poppins", system-ui, sans-serif;
+}
+
+/* Preserve the original login palette independently of the account theme. */
 .login-theme {
   --bg: #0f1115;
   --panel: #171a21;
@@ -42,10 +91,16 @@
   color: var(--text);
 }
 
-
-body {
-  margin: 0;
-  background: #0f1115;
-  color: #e7e6e1;
-  font-family: "Poppins", system-ui, sans-serif;
+/* Legacy profile surfaces follow the same charcoal palette in black mode. */
+html[data-app-theme="skin-black"] {
+  --color-skin-black: #171a21;
+  --color-black-table-color: #171a21;
+  --das-surface-solid: var(--panel);
+  --das-surface-muted: var(--bg);
+  --das-border: var(--panel-border);
+  --das-border-strong: var(--app-theme-border);
+  --das-text: var(--text);
+  --das-text-muted: var(--text-dim);
+  --das-text-soft: var(--text-dim);
+  --das-hover: var(--accent-soft);
 }

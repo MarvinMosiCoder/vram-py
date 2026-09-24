@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# VRAM Next.js frontend
 
-## Getting Started
+Active Next.js App Router migration of the React/Vite app in `../frontend/`,
+using TypeScript, React, and Tailwind v4 with the existing FastAPI backend.
+Login, session restoration, shared toasts, the original React admin shell, role
+themes, and dashboard are present. Module pages and password/announcement gates
+are still awaiting migration.
 
-First, run the development server:
+See [migration status and frontend guidance](../docs/vram/frontend.md) and
+[project documentation](../docs/vram/README.md).
 
-```bash
+## Local development
+
+Start FastAPI on port 8080 and configure its `CORS_ORIGINS` to include
+`http://localhost:3000`, following [operations](../docs/vram/operations.md).
+Then run from this directory:
+
+```powershell
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`; `/` redirects to `/login`. API helpers in
+`lib/api.ts` currently hardcode `http://localhost:8080`; they do not read an
+API URL environment variable.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Source and checks
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `app/`: routes, root layout, and global styles.
+- `context/`: auth and toast providers mounted by `app/layout.tsx`.
+- `components/`: typed shared controls, navigation, and admin shell.
+- `lib/api.ts`: typed fetch helpers for FastAPI.
+- `app/dashboard/layout.tsx`: authenticated shared layout, using the existing
+  `components/auth/RequiredAuth.tsx` wrapper.
+- `components/layout/`: shell regions and authenticated providers.
+- `config/themeOptions.ts`: role palette calculations.
+- `lib/http.ts`: Axios client sharing the current auth token.
+- `types/admin.ts`: menu and notification response types.
 
-## Learn More
+The dashboard is implemented directly in `app/dashboard/page.tsx`. Components
+use Next.js navigation and TSX; there is no separate migration component tree.
 
-To learn more about Next.js, take a look at the following resources:
+Branding assets are copied into `public/images/settings/`. Profile images use a
+local, git-ignored snapshot; see [image setup](../docs/vram/operations.md#nextjs-profile-images).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Run `npm run lint` and `npm run build` for frontend changes. `npm run start`
+serves a completed production build. Read [AGENTS.md](AGENTS.md) and the
+relevant installed Next.js guides before writing code.

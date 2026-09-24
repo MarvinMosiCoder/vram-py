@@ -1,5 +1,9 @@
 # AI chat
 
+The composer UI remains in legacy `frontend/`; no chat route has been ported to
+`frontend-next/`. Backend contracts below remain shared. See
+[migration status](frontend.md#migration-status).
+
 This guide owns the chat assistant: the endpoints, prompt construction,
 conversation storage, cost controls, and the composer UI. Other guides link
 here rather than repeating any of it.

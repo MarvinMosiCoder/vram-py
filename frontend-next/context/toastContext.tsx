@@ -4,15 +4,6 @@ import { createContext, useContext, type ReactNode } from "react";
 
 import { toast, ToastContainer, type ToastOptions, type Id } from "react-toastify";
 
-type ToastMessage =
-  | string
-  | number
-  | boolean
-  | null
-  | undefined
-  | ToastMessage[]
-  | Record<string, unknown>;
-
 type MessageType =
   | "default"
   | "success"

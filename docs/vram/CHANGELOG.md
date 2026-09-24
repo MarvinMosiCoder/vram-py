@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+- Reorganized the shell directly into Next.js `app/dashboard`, `components`,
+  `context`, `config`, `lib`, and `types`. Removed the staging folder and route
+  group; the dashboard page now owns its content and uses its own layout.
+  Converted migrated components, utilities, props, state, and API response shapes
+  to TypeScript. Branding and avatars use Next.js Image with original URLs and
+  dimensions. The existing React design and `/dashboard` URL are preserved.
+  Production build and lint passed without warnings. Mocked Chrome checks passed
+  for black/light themes at 1280px/390px, session restoration on refresh, mobile
+  sidebar controls, logout, logged-out redirects, and no horizontal overflow or
+  page errors. All 99 local documentation links resolve. No real API/database
+  mutations were exercised.
+
+- Migrated the original React shell and dashboard into Next.js:
+  role themes, navbar, backend-loaded sidebars, breadcrumbs, footer, account and
+  notification dropdowns, and logout confirmation. Reused the user's existing
+  auth wrapper. Preserved the React presentation classes while replacing React Router
+  navigation and adding typed providers. Kept account menus inside the viewport
+  and allowed narrow dashboard cards to shrink. Branding assets are copied;
+  profile uploads have a git-ignored local snapshot, not a storage migration.
+  Production build passed. Lint passed with three warnings (two retained image
+  elements and one pre-existing unused toast type). Mocked Chrome checks passed
+  for black/light themes at 1280px/390px, sidebar toggles, logout cancellation and
+  confirmation, logged-out redirects, no horizontal overflow, and no page errors.
+  Real API/database mutations were not exercised. Module pages and policy/
+  announcement gates remain pending.
+
+- Updated documentation for the ongoing migration to `frontend-next/`: made
+  Next.js the frontend development target, replaced its scaffold README, and
+  documented routes, providers, API calls, startup, CORS, and verification commands.
+  Marked remaining admin workflows as legacy `frontend/` features and retained
+  the backend's actual profile storage paths. Verified by source inspection and
+  local documentation link checks; no application build, browser checks, or
+  database mutations were performed for this documentation-only update.
+
 - Synced documentation with menu-management changes through `e8c660d`: creation
   and edit saves now persist menu rows and role assignments, with shared form
   fields and an inactive section. Replaced the debug-stub availability claim

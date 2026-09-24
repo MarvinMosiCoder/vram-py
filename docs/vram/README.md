@@ -1,6 +1,9 @@
 # VRAM documentation
 
-All project documentation lives here. Choose the guide for the task:
+Project guides live here. The active frontend migration targets `frontend-next/`
+(Next.js); `frontend/` retains the legacy React/Vite admin implementation.
+Start with [migration status](frontend.md#migration-status) to distinguish
+ported features from legacy-only screens. Choose the guide for the task:
 
 | Guide | Responsibility |
 | --- | --- |
@@ -12,7 +15,7 @@ All project documentation lives here. Choose the guide for the task:
 | [API reference](api.md) | Endpoints, request parameters, response conventions |
 | [AI chat](ai-chat.md) | Chat endpoint, memory, cost controls, composer |
 | [Profile and navbar](profile-navbar.md) | Image workflows and live navbar updates |
-| [Frontend](frontend.md) | Shared controls, themes, responsive design |
+| [Frontend](frontend.md) | Next.js migration status, shared controls, themes, responsive design |
 | [Notifications](notifications.md) | Toastify usage and per-component styling |
 | [Migrations](migrations.md) | Review and apply database schema changes |
 | [Laravel mapping](laravel.md) | Original source correspondence and port differences |

@@ -1,9 +1,80 @@
-# Themes and frontend
+# Frontend and Next.js migration
 
-Use existing controls under `frontend/src/components/` for buttons, forms, tables,
-modals, and avatars. Module-specific rendering belongs in a wrapper or custom
-module page. The app uses Tailwind v4 with runtime CSS variables; preserve the
-current React Router/Axios architecture.
+New frontend work targets `frontend-next/`, using Next.js App Router, TypeScript,
+React, and Tailwind v4. `frontend/` remains the legacy React/Vite app and the
+reference for admin features that have not been migrated. Both use the same
+FastAPI backend. Setup commands and CORS configuration live in
+[operations](operations.md).
+
+## Migration status
+
+This is an ongoing migration, not feature parity. Status below is based on
+source inspection.
+
+| Area | Current `frontend-next/` status |
+| --- | --- |
+| Routing | `app/page.tsx` redirects `/` to `/login`; `/login` and `/dashboard` exist |
+| Login | Responsive login page, validation, password visibility, clock, styled toasts, and navigation to `/dashboard` |
+| Authentication | `context/authContext.tsx` stores the token in localStorage, restores identity through `/me`, and exposes refresh/logout |
+| Dashboard | Original role, content-access, and user-count cards inside the shared admin layout |
+| Password policy and announcements | Auth context fetches and stores both; forced-change and announcement gates are not migrated |
+| Notifications | `context/toastContext.tsx` provides shared React Toastify helpers and one container through the root layout |
+| Controls | Existing login controls plus copied avatar, modal, confirmation buttons, breadcrumbs, and sidebar cards under `components/` |
+| Theme | Shared React theme tokens in `app/globals.css`; `context/ThemeContext.tsx` applies the authenticated role palette |
+| Admin shell and navigation | Original navbar, responsive sidebar, backend-loaded menus, breadcrumbs, scrolling content, footer, notification dropdown, and logout confirmation are implemented under `components/` |
+| Admin modules | Generated runtime and users/roles/menu-management screens remain in `frontend/`; their sidebar links do not establish page availability |
+| Profile, password forms, and AI chat | Remain in `frontend/`; backend endpoints still exist |
+
+`lib/api.ts` currently uses browser `fetch` with hardcoded URLs at
+`http://localhost:8080` and explicit bearer headers. The copied shell uses Axios through
+`lib/http.ts`, also targeting port 8080 and reading the same localStorage token. Auth context logout clears local state; the API
+logout helper exists but is not called by that context. Dashboard protection
+is a client redirect; protected API requests still require server authentication.
+
+## Working in Next.js
+
+Use routes under `frontend-next/app/` and the existing `next/navigation` pattern.
+Reuse controls in `frontend-next/components/` and the auth/toast contexts mounted
+by `app/layout.tsx`. Keep browser state and interactions in client components,
+as in `app/login/login-form.tsx`; the login page composes these components.
+Read `frontend-next/AGENTS.md` and the relevant installed Next.js guides before
+writing code. Do not copy Vite's `import.meta.glob` or React Router routing into
+the new app.
+
+When porting a screen, inspect the legacy implementation and its backend contract,
+then update the status above. Existing module wrapper hooks describe the legacy
+runtime until that runtime is ported. Keep module-specific rendering in wrappers
+or custom pages and preserve server validation and access checks.
+
+## Shell implementation
+
+`app/dashboard/layout.tsx` composes the existing `RequiredAuth` wrapper,
+`components/layout/AdminProviders.tsx`, and `components/layout/AppShell.tsx`. The dashboard layout
+wraps `/dashboard` while excluding login from the shell. Future top-level module
+routes can compose the same providers and shell in their own layouts. Root auth/toast
+providers are reused, not duplicated. The client auth wrapper controls visible
+UI; FastAPI must still authorize protected requests.
+
+Typed TSX components preserve the React app's classes and region structure. Next.js
+`Link` and `usePathname` replace React Router. Navbar titles derive from the path;
+sidebar expansion is tracked per path. Typed providers handle role themes,
+profile state, and sidebar visibility. The account menu is right-aligned to stay
+inside the viewport, and dashboard cards can shrink below 220px on narrow screens.
+
+The shell fetches branding, menus, and notification data from the existing API.
+The dashboard requests `/admin/users` only for role ID 1. Failed user-count reads
+show `Unavailable`. Existing notification endpoints and unported destination
+pages retain their backend/migration limitations.
+
+Branding files are copied to Next.js public assets. Uploaded profile images use
+an ignored local snapshot; see [operations](operations.md#nextjs-profile-images).
+The backend's original image storage is preserved.
+
+## Legacy frontend reference
+
+The theme palette below is shared by the React app and migrated Next.js shell.
+References to `useThemeStyles()` and module/profile screens still concern
+`frontend/`; those components have not yet been ported.
 
 ## Theme process
 
