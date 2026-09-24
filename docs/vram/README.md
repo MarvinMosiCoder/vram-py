@@ -11,6 +11,7 @@ ported features from legacy-only screens. Choose the guide for the task:
 | [Architecture](architecture.md) | Layers and source ownership |
 | [Admin processes](admin-processes.md) | Login, users, roles, menus, feature availability |
 | [Generated modules](generated-modules.md) | Create and customize a module |
+| [Users in Next.js](users-nextjs.md) | Complete conversion reference, files, endpoints, and checks |
 | [Module reference](module-reference.md) | Controller metadata and frontend extension hooks |
 | [API reference](api.md) | Endpoints, request parameters, response conventions |
 | [AI chat](ai-chat.md) | Chat endpoint, memory, cost controls, composer |

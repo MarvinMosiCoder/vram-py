@@ -9,11 +9,12 @@ type InputLabelProps = {
 };
 
 const InputLabel = ({ value, children, htmlFor, required, className = "" }: InputLabelProps) => {
+    const Tag = htmlFor ? "label" : "span";
     return (
-        <span className={`text-xs text-skin-dim ${className}`.trim()} id={htmlFor ? `${htmlFor}-label` : undefined}>
+        <Tag htmlFor={htmlFor} className={`text-xs text-skin-dim ${className}`.trim()} id={htmlFor ? `${htmlFor}-label` : undefined}>
             {value ?? children}
-            {required && <em className="text-skin-danger not-italic"> *</em>}
-        </span>
+            {required && <em aria-hidden="true" className="text-skin-danger not-italic"> *</em>}
+        </Tag>
     );
 };
 export default InputLabel;

@@ -1,0 +1,835 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState, useRef, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import axios, { type AxiosResponse } from "axios";
+import { fieldErrors, errorMessage } from "@/lib/api-errors";
+import type { ModuleRow, ModuleColumn, ModuleData, GeneratedModuleProps, FormField, FieldValue, Panel, FormContext, ActionDescriptor, ToastStatus, Capability } from "@/types/modules";
+import api from "@/lib/http";
+import { useOptionalToast, showToast } from "@/context/toastContext";
+import TableContainer from "@/components/table/TableContainer";
+import Table from "@/components/table/Table";
+import TableHead from "@/components/table/TableHead";
+import TableBody from "@/components/table/TableBody";
+import TableRow from "@/components/table/TableRow";
+import HeadData from "@/components/table/HeadData";
+import RowData from "@/components/table/RowData";
+import RowActions from "@/components/table/RowActions";
+import RowAction from "@/components/table/RowAction";
+import TopPanel from "@/components/panel/TopPanel";
+import ContentPanel from "@/components/panel/ContentPanel";
+import PrimaryButton from "@/components/button/PrimaryButton";
+import SecondaryButton from "@/components/button/SecondaryButton";
+import InputLabel from "@/components/form/InputLabel";
+import TextInput from "@/components/form/TextInput";
+import Checkbox from "@/components/form/Checkbox";
+import SelectInput from "@/components/form/SelectInput";
+import InputError from "@/components/form/InputError";
+
+// Metadata-driven module runtime. Put feature-specific behavior in wrappers.
+
+// __rowIndex is the backend's per-cell presentation -- Laravel's rowIndex()
+// merged over globalRowIndex(): {label, className, style}. Only `label` is
+// required, and a column without an entry renders exactly as before.
+const cellMeta = (row: ModuleRow, column: ModuleColumn) => row?.__rowIndex?.[column.key];
+
+const defaultCell = (row: ModuleRow, column: ModuleColumn) => {
+  const meta = cellMeta(row, column);
+  if (meta && typeof meta === "object") {
+    const label = String(meta.label ?? row[column.key] ?? "—");
+    if (meta.className || meta.style) {
+      return (
+        <span className={meta.className?.replace(/\bstatus-badge\b/g, "inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold") || undefined} style={meta.style || undefined}>
+          {label}
+        </span>
+      );
+    }
+    return label;
+  }
+  return String(row[column.key] ?? "—");
+};
+
+// Laravel's downloadResponse(): turn a blob response into a saved file.
+// Content-Disposition names it when the server sent one.
+const downloadBlob = (response: AxiosResponse<Blob>, fallbackName: string) => {
+  const disposition = response.headers?.["content-disposition"] || "";
+  const match = /filename="?([^"]+)"?/.exec(disposition);
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", match ? match[1] : fallbackName);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+// Hoisted: these are pure, and rebuilding them per render was pointless.
+const toBoolean = (value: unknown, fallback = false) => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+
+        if (['false', '0', 'no', 'off', ''].includes(normalized)) return false;
+        if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+    }
+
+    return value === undefined || value === null ? fallback : Boolean(value);
+};
+
+const booleanMap = (values: Record<string, unknown> | undefined, defaults: Record<string, boolean>): Record<string, boolean> => Object.keys(defaults).reduce((normalized, key) => ({
+    ...normalized,
+    [key]: toBoolean(values?.[key], defaults[key]),
+}), {});
+
+// "{id}" / ":id" -> the row's value. Used for customRowActions' url,
+// confirm text, and payload values.
+const resolveTemplate = (template: string, row: ModuleRow) => {
+  if (typeof template !== "string") return "";
+  const lookup = (key: string) => {
+    const value = row?.[key];
+    return value === undefined || value === null ? "" : String(value);
+  };
+  return template
+    .replace(/\{(\w+)\}/g, (_, key) => lookup(key))
+    .replace(/:(\w+)\b/g, (_, key) => lookup(key));
+};
+
+// A payload can be a function of the row, or an object whose string values
+// are templates. Anything else is passed through untouched.
+const resolvePayload = (payload: ActionDescriptor["payload"], row: ModuleRow) => {
+  if (typeof payload === "function") return payload(row) ?? {};
+  if (!payload || typeof payload !== "object") return {};
+  return Object.entries(payload).reduce<Record<string, unknown>>((out, [key, value]) => {
+    out[key] = typeof value === "string" ? resolveTemplate(value, row) : value;
+    return out;
+  }, {});
+};
+
+// Mirrors ModuleController.require(), which is `self.actions.get(cap, False)`:
+// a capability is on when the key is PRESENT and truthy. That matters because
+// a module may declare actions two ways --
+//
+//   actions = {"view": True, "create": True, ...}          flags
+//   actions = {"edit": {"label": "Edit", "icon": "pencil"}} descriptors
+//
+// -- and a descriptor object is truthy, so it enables the action and also
+// carries its label. A key that is simply absent is OFF, which is why
+// omitting "create" makes POST /<path>/store return 403.
+const capable = (value: unknown) => {
+  if (value === undefined || value === null || value === false) return false;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") return !["", "false", "0", "no", "off"].includes(value.trim().toLowerCase());
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+  return Boolean(value);
+};
+
+// The descriptor half of the above, for labels/icons. {} when the module
+// used a plain boolean.
+const descriptor = (value: Capability): ActionDescriptor => (value && typeof value === "object" && !Array.isArray(value) ? value : {});
+
+// A field whose type is "checkbox" maps to an integer column in every
+// module that has one (adm_roles.is_superadmin), and Postgres rejects a
+// boolean written into an integer column -- so send 1/0, not true/false.
+const formValue = (config: FormField, raw: unknown): FieldValue =>
+  config.type === "checkbox" ? (toBoolean(raw) ? 1 : 0)
+    : typeof raw === "string" || typeof raw === "number" ? raw : "";
+
+const EXPORT_FORMAT_OPTIONS = [
+  { value: "csv", label: "CSV" },
+  { value: "xlsx", label: "Excel (xlsx)" },
+];
+
+export default function GeneratedModulePage({
+  modulePath,
+  action: routeAction,
+  recordId,
+  title,               // override the heading (defaults to the module name)
+  renderCell,          // (row, column, defaultCell) => node
+  renderBeforeTable,   // (data) => node
+  renderAfterTable,    // (data) => node
+  // Toolbar switches: { add, export, refresh, bulk }. Like the action masks
+  // these can only turn a button OFF -- the server's config decides the rest.
+  indexButtons,
+  customIndexButtons = [],  // [{ label, onClick(reload) }] or [{ label, action, url }]
+  customIndexButtonHandlers = {},
+  bulkActions,         // false switches the whole bulk toolbar off client-side
+  actions,             // client-side mask: { view, create, edit, delete }
+  moduleAccess,        // client-side mask: { view, create, update, delete }
+  customRowActions,    // [{ label, action, url, method, confirm, payload, visibleWhen, newTab, reload }]
+  customRowActionHandlers = {},
+  // Both default to undefined so the module's own declaration wins. Pass a
+  // boolean only to override it for this page.
+  useAddRoute,         // "New" navigates to /<path>/add instead of opening the panel
+  useEditRoute,        // edit navigates to /<path>/edit/<id> instead of opening the panel
+  // --- Custom create/edit: reshape the form without touching this file ---
+  renderFormField,     // (name, config, ctx) => node -- undefined keeps the default input
+  renderBeforeForm,    // (ctx) => node
+  renderAfterForm,     // (ctx) => node
+  renderFormActions,   // (ctx) => node -- extra footer buttons
+  hideDefaultFormSubmit = false,
+  buildSubmitPayload,  // (values, ctx) => object -- what /store or /update receives
+  onFormSubmit,        // (ctx) => void -- take the submit over entirely
+  onToast,             // (message, status) => void -- opt out of the built-in toast
+}: GeneratedModuleProps) {
+  const router = useRouter();
+  const navigate = (url: string) => router.push(url);
+  const path = modulePath;
+  const requestRef = useRef<AbortController | null>(null);
+
+  const [data, setData] = useState<ModuleData | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<{ by: string | null; dir: "asc" | "desc" }>({ by: null, dir: "asc" });
+  const [panel, setPanel] = useState<Panel | null>(null);      // { mode, row, values, errors, busy }
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [showExport, setShowExport] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportForm, setExportForm] = useState({ filename: "", fileformat: "csv", limit: "" });
+
+  const accessMask = booleanMap(moduleAccess, { view: true, create: true, update: true, delete: true });
+  const actionMask = booleanMap(actions, { view: true, create: true, edit: true, delete: true });
+
+  // Allow callers to override the app-wide notification handler.
+  const shared = useOptionalToast();
+  const handleToast = useCallback((message: unknown, status: ToastStatus = "success") => {
+    if (onToast) return onToast(message, status);
+    if (shared) return shared.handleToast(message, status);
+    return showToast(message, status);
+  }, [onToast, shared]);
+
+
+  const load = useCallback(async () => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    await Promise.resolve();
+    if (controller.signal.aborted) return;
+    setLoading(true);
+    setError("");
+    const endpoint = routeAction === "add" ? `/${path}/add`
+      : routeAction === "edit" && recordId ? `/${path}/edit/${recordId}` : `/${path}`;
+    try {
+      const { data: result } = await api.get<ModuleData>(endpoint, {
+        signal: controller.signal,
+        params: { search: search || undefined, page, sort_by: sort.by || undefined, sort_dir: sort.dir },
+      });
+      if (controller.signal.aborted) return;
+      setData(result);
+      setSelectedIds([]);
+      if (result.pageMode === "create" || result.pageMode === "edit") {
+        const row = result.editRow ?? null;
+        if (result.pageMode === "edit" && !row) throw new Error("Record not found.");
+        setPanel({ mode: result.pageMode, row, errors: {}, values: Object.fromEntries(
+          Object.entries(result.formFields).map(([name, config]) => [name, formValue(config, config.type === "password" ? "" : row?.[name])])
+        ) });
+      }
+    } catch (error: unknown) {
+      if (controller.signal.aborted) return;
+      const message = errorMessage(error, "Could not load this module.");
+      setError(message);
+      handleToast(message, "error");
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
+  }, [path, search, page, sort, routeAction, recordId, handleToast]);
+
+  useEffect(() => {
+    void load();
+    return () => requestRef.current?.abort();
+  }, [load]);
+
+  const formFields = useMemo(() => data?.formFields ?? {}, [data]);
+
+  const blankValues = useCallback(
+    () => Object.fromEntries(Object.entries(formFields).map(([name, cfg]) => [name, formValue(cfg, "")])),
+    [formFields]
+  );
+
+  const rowValues = useCallback(
+    (row: ModuleRow) => Object.fromEntries(Object.entries(formFields).map(([name, cfg]) => [name, formValue(cfg, row?.[name])])),
+    [formFields]
+  );
+
+  const openView = (row: ModuleRow) => setPanel({ mode: "view", row, values: rowValues(row), errors: {} });
+  const openEdit = (row: ModuleRow) => setPanel({ mode: "edit", row, values: rowValues(row), errors: {} });
+  const openCreate = () => setPanel({ mode: "create", row: null, values: blankValues(), errors: {} });
+  const closePanel = () => {
+    setPanel(null);
+    // Opened by URL? Go back to the list, so the address bar stops
+    // describing a panel that is no longer open.
+    if (routeAction) navigate(`/${path}`);
+  };
+
+  const toggleSort = (key: string) =>
+    setSort((prev) =>
+      prev.by === key
+        ? { by: key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { by: key, dir: "asc" }
+    );
+
+  const errorsFrom = fieldErrors;
+  const messageFrom = errorMessage;
+
+  // Handed to every custom-form hook, so a wrapper page can read and drive
+  // the panel without owning its state.
+  const formContext: FormContext | null = panel && data ? {
+    mode: panel.mode,
+    values: panel.values,
+    row: panel.row,
+    errors: panel.errors,
+    busy: panel.busy,
+    data,
+    setValue: (name: string, value: FieldValue) =>
+      setPanel((p) => p ? ({ ...p, values: { ...p.values, [name]: value } }) : p),
+    close: closePanel,
+    reload: load,
+    toast: handleToast,
+  } : null;
+
+  const submitPanel = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!panel || !data || !formContext || panel.mode === "view" || panel.busy) return;
+
+    // A wrapper page can own the submit entirely -- Laravel's onFormSubmit.
+    if (onFormSubmit) return onFormSubmit(formContext);
+
+    const isCreate = panel.mode === "create";
+    const body: Record<string, unknown> = buildSubmitPayload
+      ? buildSubmitPayload(panel.values, formContext)
+      : { ...panel.values };
+    if (!isCreate) body[data.primaryKey] = panel.row?.[data.primaryKey];
+
+    setPanel((p) => p ? ({ ...p, busy: true, errors: {} }) : p);
+    try {
+      const res = await api.post(`/${path}/${isCreate ? "store" : "update"}`, body);
+      handleToast(res.data?.message || (isCreate ? "Data saved." : "Data updated."), res.data?.status || "success");
+      setPanel(null);
+      // Re-fetching /add or /edit/<id> would only reopen the panel.
+      if (routeAction) navigate(`/${path}`);
+      else load();
+    } catch (err) {
+      setPanel((p) => p ? ({ ...p, busy: false, errors: errorsFrom(err) }) : p);
+      handleToast(messageFrom(err, isCreate ? "Could not save." : "Could not update."), "danger");
+    }
+  };
+
+  const handleDelete = async (row: ModuleRow) => {
+    if (!data) return;
+    const label = row?.name ?? row?.[data.primaryKey];
+    if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return;
+    try {
+      const res = await api.post(`/${path}/delete`, { [data.primaryKey]: row[data.primaryKey] });
+      handleToast(res.data?.message || "Data deleted.", res.data?.status || "success");
+      load();
+    } catch (err) {
+      handleToast(messageFrom(err, "Could not delete."), "danger");
+    }
+  };
+
+  const toggleRow = (id: string) =>
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]
+    );
+
+  const toggleAll = (ids: string[]) =>
+    setSelectedIds((prev) => (ids.every((id) => prev.includes(id)) ? [] : ids));
+
+  const handleBulkAction = async (value: string) => {
+    if (!selectedIds.length) {
+      handleToast("Nothing selected.", "danger");
+      return;
+    }
+    const option = bulkOptions.find((entry) => entry.value === value);
+    const title = option?.confirmTitle || option?.label || "Apply this action";
+    if (!window.confirm(`${title}: ${selectedIds.length} selected record(s)?`)) return;
+
+    setBulkBusy(true);
+    try {
+      const res = await api.post(`/${path}/bulk-action`, { selectedIds, bulkAction: value });
+      handleToast(res.data?.message || "Done.", res.data?.status || "success");
+      setSelectedIds([]);
+      load();
+    } catch (err) {
+      handleToast(messageFrom(err, "Bulk action failed."), "danger");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  // responseType "blob" means an error body arrives as a Blob too, so the
+  // message has to be read back out of it before it can be shown.
+  const blobMessage = async (err: unknown, fallback: string) => {
+    if (!axios.isAxiosError<Blob>(err)) return fallback;
+    try {
+      const text = await err.response?.data?.text?.();
+      const detail = text ? JSON.parse(text)?.detail : null;
+      if (typeof detail === "string") return detail;
+    } catch {
+      /* not JSON -- fall through */
+    }
+    return fallback;
+  };
+
+  const handleExport = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!data || exportBusy) return;
+    const name = exportForm.filename || data.tableName || path;
+    setExportBusy(true);
+    try {
+      const res = await api.post(
+        `/${path}/export`,
+        {
+          fileformat: exportForm.fileformat,
+          filename: name,
+          limit: exportForm.limit ? Number(exportForm.limit) : null,
+          columns: data.columns.map((column) => column.key),
+        },
+        { responseType: "blob", params: { search: search || undefined, sort_by: sort.by || undefined, sort_dir: sort.dir } }
+      );
+      downloadBlob(res, `${name}.${exportForm.fileformat === "csv" ? "csv" : "xlsx"}`);
+      setShowExport(false);
+    } catch (err) {
+      handleToast(await blobMessage(err, "Export failed."), "danger");
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  const handleCustomIndexButton = (button: ActionDescriptor) => {
+    // A prop button carries its own onClick; a server one is a descriptor.
+    if (typeof button.onClick === "function") return button.onClick(load);
+
+    const name = String(button.action || "").toLowerCase();
+    if (name === "export_modal") return setShowExport(true);
+    if (typeof customIndexButtonHandlers[name] === "function") {
+      return customIndexButtonHandlers[name](button);
+    }
+    if (button.confirm && !window.confirm(button.confirm)) return;
+    if (button.url) navigate(button.url);
+  };
+
+  const rowActionIsVisible = (button: ActionDescriptor, row: ModuleRow) => {
+      if (button.visible === false) return false;
+      if (!button.visibleWhen || typeof button.visibleWhen !== 'object') return true;
+
+      return Object.entries(button.visibleWhen).every(([field, expected]) => {
+          const actual = row?.[field];
+          const accepted = Array.isArray(expected) ? expected : [expected];
+          return accepted.some((value) => String(value) === String(actual));
+      });
+  };
+
+  const handleCustomRowAction = async (button: ActionDescriptor, row: ModuleRow) => {
+      const buttonAction = String(button.action || '').toLowerCase();
+
+      if (buttonAction && typeof customRowActionHandlers[buttonAction] === 'function') {
+          await customRowActionHandlers[buttonAction](button, row);
+          return;
+      }
+
+      if (button.confirm && !window.confirm(resolveTemplate(button.confirm, row))) {
+          return;
+      }
+
+      const url = resolveTemplate(button.url || '', row);
+
+      if (!url) {
+          return;
+      }
+
+      if ((button.method || 'get').toLowerCase() === 'post') {
+          try {
+              const response = await api.post(url, resolvePayload(button.payload, row));
+              handleToast(response.data?.message || `${button.label || 'Action'} completed.`, response.data?.status || 'success');
+              if (button.reload !== false) {
+                  load();
+              }
+          } catch (error) {
+              handleToast(messageFrom(error, `${button.label || 'Action'} failed.`), 'danger');
+          }
+          return;
+      }
+
+      if (button.newTab) {
+          window.open(url, '_blank', 'noopener,noreferrer');
+          return;
+      }
+
+      navigate(url);
+  };
+
+  if (error) return <div role="alert"><p className="mt-3.5 font-mono text-[13px] text-skin-danger">{error}</p><SecondaryButton onClick={() => void load()}>Retry</SecondaryButton></div>;
+  if (!data) return <p className="text-[13px] text-skin-dim">Loading…</p>;
+
+  const { columns, rows, pagination, primaryKey } = data;
+  const cell = renderCell ?? defaultCell;
+  // Prop first so a wrapper page can override, then the server's
+  // declaration. Array-guarded: render_index() ships a list, but a bad
+  // value would otherwise reach .filter() below as a hard crash.
+  const buttons = Array.isArray(customRowActions)
+    ? customRowActions
+    : Array.isArray(data.customRowActions)
+      ? data.customRowActions
+      : [];
+
+  // Prop overrides when given, otherwise the module's own declaration.
+  const addRoute = useAddRoute ?? data.useAddRoute ?? false;
+  const editRoute = useEditRoute ?? data.useEditRoute ?? false;
+
+  // The server's declaration is the real answer -- read exactly the way
+  // require() reads it, with no default-true fallback, so the UI never offers
+  // a button the backend will 403. The two prop masks can only take
+  // capability away, never grant it.
+  const serverActions = {
+    view: capable(data.actions?.view),
+    create: capable(data.actions?.create),
+    edit: capable(data.actions?.edit),
+    delete: capable(data.actions?.delete),
+  };
+  const can = {
+    view:   actionMask.view   && accessMask.view   && serverActions.view,
+    create: actionMask.create && accessMask.create && serverActions.create,
+    edit:   actionMask.edit   && accessMask.update && serverActions.edit,
+    delete: actionMask.delete && accessMask.delete && serverActions.delete,
+  };
+  // A descriptor may carry {label, icon}; a boolean carries nothing.
+  const meta = {
+    view: descriptor(data.actions?.view),
+    edit: descriptor(data.actions?.edit),
+    delete: descriptor(data.actions?.delete),
+  };
+  // indexButtons() upstream: the module's toolbar config, already ANDed with
+  // the caller's privileges by the backend. The prop can only take a button
+  // away, never add one -- the same rule the action masks follow.
+  const buttonDefaults = { add: true, export: true, refresh: true, bulk: true };
+  const serverButtons = booleanMap(data.indexButtons, buttonDefaults);
+  const buttonOverride = booleanMap(indexButtons, buttonDefaults);
+  const showButton = {
+    add: serverButtons.add && buttonOverride.add,
+    export: serverButtons.export && buttonOverride.export,
+    refresh: serverButtons.refresh && buttonOverride.refresh,
+    bulk: serverButtons.bulk && buttonOverride.bulk,
+  };
+
+  // Mirrors statusColumns() on the backend, so SET ACTIVE only appears when
+  // post_bulk_action would actually find a column to write.
+  const hasStatusColumn = Object.keys(data.formFields || {}).some(
+    (name) => name === "status" || name === "is_active" || name.endsWith("_status")
+  );
+  const bulkEnabled =
+    showButton.bulk && toBoolean(data.bulkActions, true) && toBoolean(bulkActions, true);
+  const bulkOptions = !bulkEnabled
+    ? []
+    : [
+        ...(hasStatusColumn && can.edit
+          ? [
+              { value: "set_active", label: "Set active", confirmTitle: "Set to active" },
+              { value: "set_inactive", label: "Set inactive", confirmTitle: "Set to inactive" },
+            ]
+          : []),
+        ...(can.delete
+          ? [{ value: "delete", label: "Delete selected", confirmTitle: "Delete selected" }]
+          : []),
+        ...(Array.isArray(data.customBulkActions) ? data.customBulkActions : []),
+      ];
+
+  const rowIds = rows.map((row) => String(row[primaryKey]));
+  const allSelected = rowIds.length > 0 && rowIds.every((id) => selectedIds.includes(id));
+  const showSelection = bulkOptions.length > 0;
+
+  // Server-declared buttons first, then any this page passed in.
+  const toolbarButtons = [
+    ...(Array.isArray(data.customIndexButtons) ? data.customIndexButtons : []),
+    ...customIndexButtons,
+  ];
+
+  const hasRowActions = can.view || can.edit || can.delete || buttons.length > 0;
+  const fieldEntries = Object.entries(formFields);
+
+  return (
+    <ContentPanel className="">
+
+      <TopPanel title={title ?? data.module.name}>
+        <TextInput
+          className="w-50! rounded-lg border border-skin-border bg-skin-panel! px-3 py-1.75 text-[13px] text-skin-text focus:border-skin-accent-dim focus:outline-none"
+          placeholder="Search…"
+          value={search}
+          aria-label="Search records"
+          onChange={(e) => { setPage(1); setSelectedIds([]); setSearch(e.target.value); }}
+        />
+        {showButton.refresh && (
+          <SecondaryButton onClick={() => load()}>Refresh</SecondaryButton>
+        )}
+        {showButton.export && (
+          <SecondaryButton onClick={() => setShowExport(true)}>Export</SecondaryButton>
+        )}
+        {showButton.add && can.create && fieldEntries.length > 0 && (
+          <SecondaryButton onClick={() => (addRoute ? navigate(`/${path}/add`) : openCreate())}>
+            New
+          </SecondaryButton>
+        )}
+        {toolbarButtons.map((button, index) => (
+          <SecondaryButton
+            key={`${button.label || button.action || "index-button"}-${index}`}
+            onClick={() => handleCustomIndexButton(button)}
+          >
+            {button.label}
+          </SecondaryButton>
+        ))}
+      </TopPanel>
+
+      {showExport && (
+        <ContentPanel
+          className="bg-skin-bg!"
+          as="form"
+          onSubmit={handleExport}
+          onClose={() => setShowExport(false)}
+          title="Export"
+          footer={
+            <PrimaryButton type="submit" disabled={exportBusy}>
+              {exportBusy ? "Exporting…" : "Download"}
+            </PrimaryButton>
+          }
+        >
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-3.5">
+            <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
+              <InputLabel value="File name" />
+              <TextInput
+                value={exportForm.filename}
+                placeholder={data.tableName || path}
+                onChange={(e) => setExportForm({ ...exportForm, filename: e.target.value })}
+              />
+            </label>
+            <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
+              <InputLabel value="Format" />
+              <SelectInput
+                value={exportForm.fileformat}
+                options={EXPORT_FORMAT_OPTIONS}
+                onChange={(e) => setExportForm({ ...exportForm, fileformat: e.target.value })}
+              />
+            </label>
+            <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
+              <InputLabel value="Row limit" />
+              <TextInput
+                type="number"
+                value={exportForm.limit}
+                placeholder="All rows"
+                onChange={(e) => setExportForm({ ...exportForm, limit: e.target.value })}
+              />
+            </label>
+          </div>
+          <p className="text-[13px] text-skin-dim">
+            The current search, filters and sort order are applied to the export.
+          </p>
+        </ContentPanel>
+      )}
+
+      {showSelection && selectedIds.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-skin-border bg-skin-panel px-3 py-2.5">
+          <span className="text-[13px] text-skin-dim">{selectedIds.length} selected</span>
+          {bulkOptions.map((option) => (
+            <SecondaryButton
+              key={option.value}
+              disabled={bulkBusy}
+              onClick={() => handleBulkAction(option.value)}
+            >
+              {option.label}
+            </SecondaryButton>
+          ))}
+          <SecondaryButton onClick={() => setSelectedIds([])}>Clear</SecondaryButton>
+        </div>
+      )}
+
+      {panel && formContext && (
+        <ContentPanel
+          className="bg-skin-bg!"
+          as="form"
+          onSubmit={submitPanel}
+          onClose={closePanel}
+          title={
+            panel.mode === "create" ? "New record"
+              : panel.mode === "edit" ? `Edit ${panel.row?.[primaryKey]}`
+              : `Record ${panel.row?.[primaryKey]}`
+          }
+          footer={
+            panel.mode !== "view" && fieldEntries.length > 0 ? (
+              <>
+                {renderFormActions?.(formContext)}
+                {!hideDefaultFormSubmit && (
+                  <PrimaryButton type="submit" disabled={panel.busy}>
+                    {panel.busy ? "Saving…" : panel.mode === "create" ? "Create" : "Save"}
+                  </PrimaryButton>
+                )}
+              </>
+            ) : null
+          }
+        >
+          {renderBeforeForm?.(formContext)}
+
+          {fieldEntries.length === 0 ? (
+            <p className="text-[13px] text-skin-dim">This module declares no form fields.</p>
+          ) : (
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-3.5">
+              {fieldEntries.map(([name, config]) => {
+                // A wrapper page may replace any single field; returning
+                // undefined falls through to the default input below.
+                const custom = renderFormField?.(name, config, formContext);
+                if (custom !== undefined) return <div key={name}>{custom}</div>;
+
+                const value = panel.values[name];
+                const readOnly = panel.mode === "view";
+                const onChange = (next: FieldValue) =>
+                  setPanel((p) => p ? ({ ...p, values: { ...p.values, [name]: next } }) : p);
+
+                return (
+                  <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim" key={name}>
+                    <InputLabel value={config.label ?? name} required={config.required} />
+                    {config.type === "checkbox" ? (
+                      <Checkbox checked={value} disabled={readOnly || panel.busy} onChange={(next) => onChange(next)} />
+                    ) : config.type === "select" ? (
+                      <SelectInput
+                        value={value}
+                        options={config.options ?? []}
+                        disabled={readOnly || panel.busy}
+                        placeholder="—"
+                        onChange={(e) => onChange(e.target.value)}
+                      />
+                    ) : config.type === "react-select" ? (
+                      // Same FK-lookup field as "select" (resolved_form_fields()
+                      // fills `options` for both), styled with react-select
+                      // instead of the native control -- a module opts in per
+                      // field by declaring this type, e.g. users_module.py's
+                      // id_adm_role. Other modules' "select" fields are
+                      // unaffected.
+                      <SelectInput
+                        type="react-select"
+                        value={(config.options ?? []).find((o) => String(o.value) === String(value)) ?? null}
+                        options={config.options ?? []}
+                        disabled={readOnly || panel.busy}
+                        placeholder="—"
+                        onChange={(option) => onChange(option ? option.value : "")}
+                      />
+                    ) : (
+                      <TextInput
+                        // Whitelisted, not a bare pass-through -- form_fields'
+                        // `type` also carries values with no matching <input
+                        // type>, like "textarea", "select" and "react-select"
+                        // (all handled above). An unrecognized type still has
+                        // to fall back to text.
+                        type={
+                          ["number", "password", "email", "tel", "url", "date", "datetime-local", "time"].includes(config.type)
+                            ? config.type
+                            : "text"
+                        }
+                        value={value}
+                        maxLength={config.max}
+                        readOnly={readOnly}
+                        disabled={panel.busy}
+                        onChange={(e) => onChange(e.target.value)}
+                      />
+                    )}
+                    <InputError message={panel.errors?.[name]} />
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          {renderAfterForm?.(formContext)}
+        </ContentPanel>
+      )}
+
+      {renderBeforeTable?.(data)}
+
+      <TableContainer>
+        <Table>
+        <TableHead>
+          <TableRow>
+            {/* Must mirror the body cells below, actions column included, or
+                every header sits one column to the left of its data. */}
+            {showSelection && (
+              <HeadData center width="1%">
+                <Checkbox checked={allSelected} onChange={() => toggleAll(rowIds)} />
+              </HeadData>
+            )}
+            {hasRowActions && <HeadData center width="1%">Actions</HeadData>}
+            {columns.map((column) => (
+              <HeadData
+                key={column.key}
+                sortable
+                sorted={sort.by === column.key}
+                direction={sort.dir}
+                onSort={() => toggleSort(column.key)}
+              >
+                {column.label}
+              </HeadData>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={String(row[primaryKey])}>
+              {showSelection && (
+                <RowData center>
+                  <Checkbox
+                    checked={selectedIds.includes(String(row[primaryKey]))}
+                    onChange={() => toggleRow(String(row[primaryKey]))}
+                  />
+                </RowData>
+              )}
+              {hasRowActions && (
+                <RowData center>
+                  <RowActions>
+                    {can.view && <RowAction type="button" action="view" icon={meta.view.icon} title={meta.view.label} onClick={() => openView(row)} />}
+                    {can.edit && <RowAction type="button" action="edit" icon={meta.edit.icon} title={meta.edit.label} onClick={() => (editRoute ? navigate(`/${path}/edit/${row[primaryKey]}`) : openEdit(row))} />}
+                    {can.delete && <RowAction type="button" action="delete" icon={meta.delete.icon} title={meta.delete.label} onClick={() => handleDelete(row)} />}
+                    {buttons
+                      .filter((button) => rowActionIsVisible(button, row))
+                      .map((button, index) => (
+                        <RowAction
+                          key={`${button.label || button.action || 'row-action'}-${index}`}
+                          type="button"
+                          action={button.iconAction || button.action || 'view'}
+                          icon={button.icon}
+                          title={button.label || button.title}
+                          onClick={() => handleCustomRowAction(button, row)}
+                        />
+                      ))}
+                  </RowActions>
+                </RowData>
+              )}
+              {columns.map((column) => (
+                <RowData key={column.key}>{cell(row, column, defaultCell)}</RowData>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+        </Table>
+      </TableContainer>
+
+      {rows.length === 0 && !loading && <p className="text-[13px] text-skin-dim">No records.</p>}
+
+      {pagination.last_page > 1 && (
+        <div className="flex flex-wrap items-center gap-3 text-[13px]">
+          <SecondaryButton disabled={page <= 1} onClick={() => setPage(page - 1)}>
+            Prev
+          </SecondaryButton>
+          <span className="text-[13px] text-skin-dim">
+            Page {pagination.page} of {pagination.last_page} · {pagination.total} records
+          </span>
+          <SecondaryButton disabled={page >= pagination.last_page} onClick={() => setPage(page + 1)}>
+            Next
+          </SecondaryButton>
+        </div>
+      )}
+
+      {renderAfterTable?.(data)}
+    </ContentPanel>
+  );
+}

@@ -4,6 +4,12 @@ Use [generated modules](generated-modules.md) for the setup workflow and
 [API](api.md#dynamic-endpoints) for request/response conventions. The definitive
 implementation is `backend/app/helpers/generated_module.py`.
 
+The Next.js runtime is `frontend-next/components/modules/GeneratedModulePage.tsx`;
+its hook types are in `frontend-next/types/modules.ts`. It receives `modulePath`
+explicitly, plus optional `action="add"` or `action="edit"` and `recordId` for
+separate generated form routes. Use the [Users reference](users-nextjs.md) for
+custom forms. Legacy React Router discovery details below apply only to Vite.
+
 ## Controller configuration
 
 | Property | Responsibility |
@@ -47,9 +53,9 @@ Only methods marked `@action` are routable.
 
 ## Frontend wrapper props
 
-These props describe the generated runtime in legacy `frontend/`. That runtime
-is not yet available in `frontend-next/`; see
-[migration status](frontend.md#migration-status).
+These hooks are available in the typed Next.js runtime as well as the original
+React runtime. Next.js requires an explicit `modulePath`; route params are passed
+from the corresponding `app/` page. See [migration status](frontend.md#migration-status).
 
 | Prop | Use |
 | --- | --- |

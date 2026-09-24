@@ -17,7 +17,8 @@ Its original guides are in `C:/laragon/www/vram/docs/vram/`.
 | Admin controller metadata | `backend/app/modules/admin/` |
 | Models and seeders | `backend/app/models/admin/`, `backend/app/seeders/` |
 | Next.js routes and root providers | `frontend-next/app/`, `frontend-next/app/layout.tsx` |
-| Next.js API helpers | `frontend-next/lib/api.ts` |
+| Next.js API helpers | `frontend-next/lib/api.ts`, `frontend-next/lib/http.ts` |
+| Next.js generated runtime and Users forms | `frontend-next/components/modules/`, `frontend-next/components/users/` |
 | Next.js auth and toast state | `frontend-next/context/` |
 | Next.js shared controls | `frontend-next/components/` |
 | Next.js admin shell and role theme | `frontend-next/components/layout/`, `frontend-next/context/` |
@@ -40,7 +41,8 @@ routes. AuthProvider restores the token after mounting and fetches `/me`, passwo
 policy, and announcements. `app/dashboard/layout.tsx` wraps the dashboard with
 `RequiredAuth`, typed theme/sidebar providers, and the copied React shell in
 `components/layout/`. The dashboard renders the original cards; backend-loaded
-sidebar menus and logout confirmation are available. Module pages and
+sidebar menus and logout confirmation are available. `app/users/layout.tsx`
+composes the same shell for Users list/add/edit routes. Other module pages and
 policy/announcement gates are not yet ported.
 
 See [Laravel mapping](laravel.md) for source correspondence and port differences.

@@ -1,10 +1,10 @@
 # Generated modules
 
-The backend generation workflow remains shared. Frontend routes, wrappers, and
-automatic page discovery below belong to legacy `frontend/`; the generated
-runtime and module screens have not been ported to `frontend-next/`. Creating a
-controller does not create a Next.js page. Target new frontend migration work
-in `frontend-next/` and track it in [migration status](frontend.md#migration-status).
+The backend generation workflow remains shared. The typed generated runtime is
+now at `frontend-next/components/modules/GeneratedModulePage.tsx`. Users is the
+first migrated module; see the [Users conversion guide](users-nextjs.md) for a
+complete route, form, and backend reference. Creating a controller does not
+create a Next.js page. Vite's automatic page discovery only applies to `frontend/`.
 
 ## Add a module
 
@@ -15,9 +15,13 @@ in `frontend-next/` and track it in [migration status](frontend.md#migration-sta
    matching active `adm_modules` row with a valid lowercase path.
 4. Discovery imports controller files automatically. Restart the backend if it
    is not running with reload enabled.
-5. Visit `/<path>`. Add a role-specific menu row if needed; protected active
+5. Create `frontend-next/app/<path>/page.tsx`, rendering
+   `<GeneratedModulePage modulePath="your-path" />`. Add a layout composing
+   RequireAuth, AdminProviders, and AppShell, following `app/users/layout.tsx`.
+   When enabling separate add/edit routes, create those pages too, following Users.
+6. Visit `/<path>`. Add a role-specific menu row if needed; protected active
    module rows already feed the admin sidebar.
-6. Add a wrapper at `frontend/src/pages/modules/<path>/index.jsx` only for custom UI.
+7. Put custom client wrappers in `frontend-next/components/<feature>/`.
 
 `module_generator.generate(db, name, path, table_name, ...)` can generate editable
 controller metadata and its module row. Inspect its output before use. The helper
@@ -34,8 +38,8 @@ Controller configuration and hook signatures live in the
 Prefer controller field/row metadata, then wrapper hooks such as `renderCell`,
 `renderFormField`, `renderBeforeForm`, `buildSubmitPayload`, and `onFormSubmit`.
 Use `onToast` to override a wrapper's notifications. Do not edit the shared
-GeneratedModulePage for one module's design. Custom pages are discovered from
-files; there is no route-registration list to extend for every module.
+GeneratedModulePage for one module's design. Next.js routes are explicit `app/`
+page files; there is no Vite glob or React Router registration in Next.js.
 
 Preserve search, sort, pagination, validation, and reload behavior when replacing
 submission. Declared actions govern generated buttons, but custom endpoints must

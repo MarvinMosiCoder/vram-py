@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Migrated the typed generated-module runtime and Users list/view/add/edit into
+  `frontend-next`, preserving the React controls, form layout, and theme tokens.
+  Added normal `app/users` routes and reusable components without staging folders
+  or route groups. Added a [Users conversion guide](users-nextjs.md).
+- Kept the backend unchanged. The Next.js form uses the existing generated
+  metadata and custom Users save endpoints, resolves the displayed role name
+  against role options, omits blank edit passwords, and handles existing errors.
+- Confirmed the configured database is reachable and the active `users` module
+  resolves to `UsersController`. Next.js production build and lint pass; mocked Chrome checks at
+  1280px and 390px cover Users forms, validation, search/sort, export filters,
+  retries, permission controls, and overflow. No real user records were changed.
+
 - Reorganized the shell directly into Next.js `app/dashboard`, `components`,
   `context`, `config`, `lib`, and `types`. Removed the staging folder and route
   group; the dashboard page now owns its content and uses its own layout.

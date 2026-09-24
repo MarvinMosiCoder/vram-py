@@ -1,0 +1,17 @@
+"use client";
+
+import type { ReactNode, MouseEventHandler } from "react";
+// <tr>. `selected` and `onClick` are here for row selection, which no module
+// uses yet -- the props exist so adding it later needs no change here.
+const TableRow = ({ children, onClick, selected }: { children: ReactNode; onClick?: MouseEventHandler<HTMLTableRowElement>; selected?: boolean }) => {
+    return (
+        <tr
+            className={selected ? "bg-skin-accent-soft" : undefined}
+            onClick={onClick}
+            style={onClick ? { cursor: "pointer" } : undefined}
+        >
+            {children}
+        </tr>
+    );
+};
+export default TableRow;

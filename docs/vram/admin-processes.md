@@ -6,7 +6,8 @@
 cards, and the shared React admin shell with role themes, backend-loaded menus,
 and logout confirmation. AuthProvider fetches password policy and announcements,
 but their gates are not ported. Logout clears local state without calling the
-backend logout helper. Module pages remain in the Vite app.
+backend logout helper. Users list/view/add/edit and the generated runtime are
+migrated; other module pages remain in the Vite app. See the [Users guide](users-nextjs.md).
 
 The workflows and availability table below describe legacy `frontend/` and the
 shared FastAPI backend. They do not establish Next.js screen availability.
@@ -105,7 +106,7 @@ Open `/users`; use `/users/add` or `/users/edit/<id>` for the custom forms.
 Enter name, email, role, and password as required by the form. Role choices come
 from server form metadata. Save posts to `/users/store` or `/users/update`.
 The edit form omits an empty password. Successful saves notify and return to
-the list; validation messages remain near fields and request failures show a toast.
+the list; validation messages remain near fields and request failures are visible.
 
 `UsersController` has custom save methods: they check required values and email
 uniqueness, hash a supplied password, and return an ORM user rather than the

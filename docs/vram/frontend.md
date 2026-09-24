@@ -22,7 +22,7 @@ source inspection.
 | Controls | Existing login controls plus copied avatar, modal, confirmation buttons, breadcrumbs, and sidebar cards under `components/` |
 | Theme | Shared React theme tokens in `app/globals.css`; `context/ThemeContext.tsx` applies the authenticated role palette |
 | Admin shell and navigation | Original navbar, responsive sidebar, backend-loaded menus, breadcrumbs, scrolling content, footer, notification dropdown, and logout confirmation are implemented under `components/` |
-| Admin modules | Generated runtime and users/roles/menu-management screens remain in `frontend/`; their sidebar links do not establish page availability |
+| Admin modules | Typed generated runtime plus Users list/view/add/edit are migrated. Roles and menu-management screens remain in `frontend/` |
 | Profile, password forms, and AI chat | Remain in `frontend/`; backend endpoints still exist |
 
 `lib/api.ts` currently uses browser `fetch` with hardcoded URLs at
@@ -42,8 +42,8 @@ writing code. Do not copy Vite's `import.meta.glob` or React Router routing into
 the new app.
 
 When porting a screen, inspect the legacy implementation and its backend contract,
-then update the status above. Existing module wrapper hooks describe the legacy
-runtime until that runtime is ported. Keep module-specific rendering in wrappers
+then update the status above. The typed runtime and hooks now live in
+`components/modules/GeneratedModulePage.tsx` and `types/modules.ts`. Keep module-specific rendering in wrappers
 or custom pages and preserve server validation and access checks.
 
 ## Shell implementation
@@ -73,8 +73,8 @@ The backend's original image storage is preserved.
 ## Legacy frontend reference
 
 The theme palette below is shared by the React app and migrated Next.js shell.
-References to `useThemeStyles()` and module/profile screens still concern
-`frontend/`; those components have not yet been ported.
+References to `useThemeStyles()` and unconverted module/profile screens still concern
+`frontend/`. Use the [Users guide](users-nextjs.md) for the migrated module reference.
 
 ## Theme process
 

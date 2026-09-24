@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Local snapshot of backend-managed uploads; never commit user images.
 /public/images/profile/
+
+# Project-local package cache
+/.npm-cache/
