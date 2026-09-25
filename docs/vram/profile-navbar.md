@@ -1,8 +1,15 @@
 # Profile and navbar
 
-The profile editor remains in legacy `frontend/`. The navbar and avatar display
-have been ported to `frontend-next/components/`, with a local image snapshot described
-in [operations](operations.md#nextjs-profile-images). The backend still stores
+The profile editor and the navbar avatar are ported to `frontend-next/`:
+`components/users/Profile.tsx` is served at `/profile` by
+`app/(admin)/profile/page.tsx`, and legacy `frontend/src/pages/modules/users/Profile.jsx`
+remains. The Next.js page reads the user from `useAuth()` rather than props, gets
+its navbar title from the URL, and displays `/me`'s `id` and `role` where the React
+page read `user_id` and `privilege_name`, which `/me` does not return. Built-in
+avatars are copied to `frontend-next/public/images/profile-avatars/`. Saved images
+come from the local snapshot described in [operations](operations.md#nextjs-profile-images),
+so an image uploaded through Next.js does not display there until the snapshot is
+refreshed. The backend still stores
 images under the `frontend/public/` paths below; preserve those directories.
 See [migration status](frontend.md#migration-status).
 

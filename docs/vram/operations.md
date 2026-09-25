@@ -64,7 +64,8 @@ The command above serves FastAPI on 8080 to match both the fetch helpers in
 Both currently hardcode `http://localhost:8080`. Interactive API reference is at
 `http://localhost:8080/docs`. Uvicorn without `--port` defaults to 8000; keep the
 server port and client URLs aligned. The Next.js helpers do not read an API URL
-environment variable. The legacy client does not read `VITE_API_URL` (shown as
+environment variable; `NEXT_PUBLIC_API_URL` in the committed
+`frontend-next/env.example.local` is currently unused. The legacy client does not read `VITE_API_URL` (shown as
 port 8000 in `frontend/.env.example`). Inspect configuration rather than
 assuming a deployed instance uses the same addresses or credentials.
 

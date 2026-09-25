@@ -13,7 +13,7 @@ source inspection.
 
 | Area | Current `frontend-next/` status |
 | --- | --- |
-| Routing | `app/page.tsx` redirects `/` to `/login`; `/login` and `/dashboard` exist |
+| Routing | `app/page.tsx` redirects `/` to `/login`; `/login`, `/dashboard`, `/users`, `/users/add`, `/users/edit/[id]`, `/roles`, `/roles/add`, `/roles/edit/[id]`, and `/profile` exist. `/menus`, `/change-password`, and other admin paths have no Next.js route |
 | Login | Responsive login page, validation, password visibility, clock, styled toasts, and navigation to `/dashboard` |
 | Authentication | `context/authContext.tsx` stores the token in localStorage, restores identity through `/me`, and exposes refresh/logout |
 | Dashboard | Original role, content-access, and user-count cards inside the shared admin layout |
@@ -22,8 +22,9 @@ source inspection.
 | Controls | Existing login controls plus copied avatar, modal, confirmation buttons, breadcrumbs, and sidebar cards under `components/` |
 | Theme | Shared React theme tokens in `app/globals.css`; `context/ThemeContext.tsx` applies the authenticated role palette |
 | Admin shell and navigation | Original navbar, responsive sidebar, backend-loaded menus, breadcrumbs, scrolling content, footer, notification dropdown, and logout confirmation are implemented under `components/` |
-| Admin modules | Typed generated runtime plus Users list/view/add/edit are migrated. Roles and menu-management screens remain in `frontend/` |
-| Profile, password forms, and AI chat | Remain in `frontend/`; backend endpoints still exist |
+| Admin modules | Typed generated runtime plus Users list/view/add/edit and Roles list/add/edit (`components/roles/`, with the shared `components/form/Card.tsx`) are migrated. Menu management remains in `frontend/`; its backend endpoints are shared |
+| Profile | `components/users/Profile.tsx` at `/profile`; see [profile guide](profile-navbar.md) |
+| Password forms and AI chat | Remain in `frontend/`; backend endpoints still exist |
 
 `lib/api.ts` currently uses browser `fetch` with hardcoded URLs at
 `http://localhost:8080` and explicit bearer headers. The copied shell uses Axios through
@@ -48,10 +49,15 @@ or custom pages and preserve server validation and access checks.
 
 ## Shell implementation
 
-`app/dashboard/layout.tsx` composes the existing `RequiredAuth` wrapper,
-`components/layout/AdminProviders.tsx`, and `components/layout/AppShell.tsx`. The dashboard layout
-wraps `/dashboard` while excluding login from the shell. Future top-level module
-routes can compose the same providers and shell in their own layouts. Root auth/toast
+Signed-in screens live in the `app/(admin)/` route group. The parentheses keep
+the folder name out of the URL, so `app/(admin)/users/page.tsx` serves `/users`.
+`app/(admin)/layout.tsx` composes the existing `RequiredAuth` wrapper,
+`components/layout/AdminProviders.tsx`, and `components/layout/AppShell.tsx`
+once for every page in the group; `/login` sits outside it and gets no shell.
+Because the layout is shared, the shell stays mounted when moving between
+admin pages. A new admin screen needs only `app/(admin)/<path>/page.tsx`, with no
+layout of its own. Do not also create `app/<path>/`: two folders resolving to the
+same URL fail the build. Root auth/toast
 providers are reused, not duplicated. The client auth wrapper controls visible
 UI; FastAPI must still authorize protected requests.
 
@@ -73,8 +79,8 @@ The backend's original image storage is preserved.
 ## Legacy frontend reference
 
 The theme palette below is shared by the React app and migrated Next.js shell.
-References to `useThemeStyles()` and unconverted module/profile screens still concern
-`frontend/`. Use the [Users guide](users-nextjs.md) for the migrated module reference.
+`useThemeStyles()` exists in both apps (`frontend-next/hooks/useThemeStyles.ts` is a
+typed copy); unconverted module screens still concern `frontend/`. Use the [Users guide](users-nextjs.md) for the migrated module reference.
 
 ## Theme process
 

@@ -63,6 +63,17 @@ function notifyLogin(
   });
 }
 
+const LoginLoaderOverlay = () => (
+  <div className="fixed inset-0 z-999 flex items-center justify-center bg-[rgba(7,8,10,0.82)] backdrop-blur-[2px]">
+    <div className="flex items-center gap-2.5 rounded-full border border-skin-border bg-skin-panel px-5 py-3 text-[13px] font-semibold text-skin-text">
+      <span className="size-2 animate-pulse rounded-full bg-skin-accent nth-2:[animation-delay:150ms] nth-3:[animation-delay:300ms]" />
+      <span className="size-2 animate-pulse rounded-full bg-skin-accent nth-2:[animation-delay:150ms] nth-3:[animation-delay:300ms]" />
+      <span className="size-2 animate-pulse rounded-full bg-skin-accent nth-2:[animation-delay:150ms] nth-3:[animation-delay:300ms]" />
+      <span>Signing you in</span>
+    </div>
+  </div>
+);
+
 export default function LoginForm() {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
@@ -86,59 +97,61 @@ export default function LoginForm() {
       router.replace("/dashboard");
     } catch (error) {
       notifyLogin(getApiErrorMessage(error), "error");
-    } finally {
       setLoading(false);
     }
   }
 
   return (
-    <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>
-      <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
-        <InputLabel value="Email" />
-        <div className="relative [&_input]:pl-8.5">
-          <i aria-hidden="true" className="fa fa-envelope pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[13px] text-skin-dim" />
-          <TextInput
-            type="email"
-            name="email"
-            required
-            value={email}
-            placeholder="Enter email"
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="username"
-            autoFocus
-          />
-        </div>
-      </label>
+    <>
+      {loading && <LoginLoaderOverlay />}
+      <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>
+        <label className="m-0 flex flex-col gap-1.5 text-[13px] text-skin-dim">
+          <InputLabel value="Email" />
+          <div className="relative [&_input]:pl-8.5">
+            <i aria-hidden="true" className="fa fa-envelope pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[13px] text-skin-dim" />
+            <TextInput
+              type="email"
+              name="email"
+              required
+              value={email}
+              placeholder="Enter email"
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="username"
+              autoFocus
+            />
+          </div>
+        </label>
 
-      <label className="m-0 flex flex-col mt-2 gap-1.5 text-[13px] text-skin-dim">
-        <InputLabel value="Password"  />
-        <div className="relative [&_input]:pl-8.5 [&_input]:pr-10">
-          <i aria-hidden="true" className="fa fa-lock pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[13px] text-skin-dim" />
-          <TextInput
-            type={showPassword ? "text" : "password"}
-            name="password"
-            required
-            value={password}
-            placeholder="Enter your password"
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
-          <button
-            type="button"
-            className="absolute top-1/2 right-1 m-0 size-7 -translate-y-1/2 cursor-pointer rounded bg-transparent p-0 text-skin-dim hover:bg-skin-border hover:text-skin-text"
-            onClick={() => setShowPassword((v) => !v)}
-            aria-pressed={showPassword}
-            aria-label={showPassword ? "Hide password" : "Show password"}
-          >
-            <i aria-hidden="true" className={showPassword ? "fa fa-eye-slash" : "fa fa-eye"} />
-          </button>
-        </div>
-      </label>
+        <label className="m-0 flex flex-col mt-2 gap-1.5 text-[13px] text-skin-dim">
+          <InputLabel value="Password"  />
+          <div className="relative [&_input]:pl-8.5 [&_input]:pr-10">
+            <i aria-hidden="true" className="fa fa-lock pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[13px] text-skin-dim" />
+            <TextInput
+              type={showPassword ? "text" : "password"}
+              name="password"
+              required
+              value={password}
+              placeholder="Enter your password"
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              className="absolute top-1/2 right-1 m-0 size-7 -translate-y-1/2 cursor-pointer rounded bg-transparent p-0 text-skin-dim hover:bg-skin-border hover:text-skin-text"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-pressed={showPassword}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              <i aria-hidden="true" className={showPassword ? "fa fa-eye-slash" : "fa fa-eye"} />
+            </button>
+          </div>
+        </label>
 
 
-      <PrimaryButton className="mt-5.5! w-full! p-2.75! text-sm! enabled:hover:bg-skin-accent-dim enabled:hover:text-skin-text enabled:hover:brightness-100" disabled={loading}>
-        {loading ? "Logging in, please wait..." : "Login"}
-      </PrimaryButton>
-    </form>
+        <PrimaryButton className="mt-5.5! w-full! p-2.75! text-sm! enabled:hover:bg-skin-accent-dim enabled:hover:text-skin-text enabled:hover:brightness-100" disabled={loading}>
+          {loading ? "Logging in, please wait..." : "Login"}
+        </PrimaryButton>
+      </form>
+    </>
   );
 }

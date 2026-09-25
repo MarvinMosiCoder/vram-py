@@ -27,10 +27,10 @@ Paths below are relative to `frontend-next/`:
 
 | File | What to learn |
 | --- | --- |
-| `app/users/layout.tsx` | Compose authentication, theme/sidebar providers, and the shared shell |
-| `app/users/page.tsx` | A page component selects its feature component |
-| `app/users/add/page.tsx` | Reuse the form in create mode |
-| `app/users/edit/[id]/page.tsx` | Await Next.js params and pass the validated ID into the client form |
+| `app/(admin)/layout.tsx` | Shared by all admin routes: authentication, theme/sidebar providers, and the shell |
+| `app/(admin)/users/page.tsx` | A page component selects its feature component |
+| `app/(admin)/users/add/page.tsx` | Reuse the form in create mode |
+| `app/(admin)/users/edit/[id]/page.tsx` | Await Next.js params and pass the validated ID into the client form |
 | `components/users/UsersPage.tsx` | Wrap the generated list; customize role display and hide password in View |
 | `components/users/UserForm.tsx` | Client state, loading, dropdown options, validation, whitelisted payloads, save, navigation |
 | `components/modules/GeneratedModulePage.tsx` | Shared metadata-driven table, panels, exports, bulk actions, and extension hooks |
@@ -39,10 +39,11 @@ Paths below are relative to `frontend-next/`:
 | `lib/http.ts`, `lib/api-errors.ts` | Authenticated Axios client and API error normalization |
 
 Only interactive components need `"use client"`. The small route pages compose
-them. There is no `legacy` directory or `(admin)` route group. `[id]` means a
+them. There is no `legacy` directory. `(admin)` is a route group: its name is not part
+of the URL, so `app/(admin)/users` still serves `/users`. `[id]` means a
 dynamic URL segment: `/users/edit/2` supplies `id = "2"`.
 
-For another generated module, add its route and layout, then render
+For another generated module, add its route under `app/(admin)/`, then render
 `<GeneratedModulePage modulePath="your-path" />`. Put custom behavior in a
 feature wrapper, not in the shared runtime. Create add/edit pages when the
 controller enables `use_add_route`/`use_edit_route`; otherwise forms open inline.

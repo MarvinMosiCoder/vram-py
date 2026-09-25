@@ -15,10 +15,10 @@ create a Next.js page. Vite's automatic page discovery only applies to `frontend
    matching active `adm_modules` row with a valid lowercase path.
 4. Discovery imports controller files automatically. Restart the backend if it
    is not running with reload enabled.
-5. Create `frontend-next/app/<path>/page.tsx`, rendering
-   `<GeneratedModulePage modulePath="your-path" />`. Add a layout composing
-   RequireAuth, AdminProviders, and AppShell, following `app/users/layout.tsx`.
-   When enabling separate add/edit routes, create those pages too, following Users.
+5. Create `frontend-next/app/(admin)/<path>/page.tsx`, rendering
+   `<GeneratedModulePage modulePath="your-path" />`. The shared
+   `app/(admin)/layout.tsx` supplies authentication and the admin shell, so the
+   module needs no layout of its own. When enabling separate add/edit routes, create those pages too, following Users.
 6. Visit `/<path>`. Add a role-specific menu row if needed; protected active
    module rows already feed the admin sidebar.
 7. Put custom client wrappers in `frontend-next/components/<feature>/`.

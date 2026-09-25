@@ -1,7 +1,8 @@
 # Admin architecture
 
-The frontend is migrating to Next.js App Router in `frontend-next/`. Its current
-client components call FastAPI through typed fetch helpers. The legacy app in
+The frontend is migrating to Next.js App Router in `frontend-next/`. Its client
+components call FastAPI through typed fetch helpers in `lib/api.ts` (login and
+session) and an authenticated Axios client in `lib/http.ts` (shell and modules). The legacy app in
 `frontend/` uses React/Vite, React Router, and a shared Axios client. PostgreSQL
 stores identities, roles, modules, and menus. Both frontends share the backend;
 see [migration status](frontend.md#migration-status) for current screen coverage.
@@ -38,11 +39,12 @@ notifications raised before navigation survive route changes.
 
 In Next.js, `app/layout.tsx` mounts ToastProvider around AuthProvider and all
 routes. AuthProvider restores the token after mounting and fetches `/me`, password
-policy, and announcements. `app/dashboard/layout.tsx` wraps the dashboard with
-`RequiredAuth`, typed theme/sidebar providers, and the copied React shell in
-`components/layout/`. The dashboard renders the original cards; backend-loaded
-sidebar menus and logout confirmation are available. `app/users/layout.tsx`
-composes the same shell for Users list/add/edit routes. Other module pages and
+policy, and announcements. `app/(admin)/layout.tsx` wraps every signed-in route
+(currently dashboard and Users list/add/edit) with `RequiredAuth`, typed
+theme/sidebar providers, and the copied React shell in `components/layout/`; see
+[shell implementation](frontend.md#shell-implementation). The dashboard renders
+the original cards; backend-loaded sidebar menus and logout confirmation are
+available. Other module pages and
 policy/announcement gates are not yet ported.
 
 See [Laravel mapping](laravel.md) for source correspondence and port differences.

@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Ported Roles to `frontend-next`: `/roles` list, `/roles/add`, and `/roles/edit/[id]`
+  (`components/roles/RolesPage.tsx`, `RolesForm.tsx`) plus a typed `components/form/Card.tsx`.
+  Select-all state is now derived on render instead of synced by an effect, and the
+  form submits only its editable role fields. Verified with `tsc`, `npm run lint`, and
+  `npm run build`; not browser-tested.
+
+- Ported the profile editor to `frontend-next` at `/profile`
+  (`components/users/Profile.tsx`) and `useThemeStyles` to `hooks/useThemeStyles.ts`,
+  keeping the React markup and classes. Shows `/me`'s `id` and `role`, fixing the
+  React page's blank `user_id`/`privilege_name`; dropped the stray `#` before email
+  and image count, and Modal props the component never accepted. Copied built-in
+  avatars to Next.js public assets. Verified with `tsc`, `npm run lint`, and
+  `npm run build`; not browser-tested.
+
+- Moved `frontend-next` dashboard and Users routes into an `app/(admin)/` route
+  group with one shared `layout.tsx`, replacing the per-module layout copies.
+  URLs are unchanged; new admin screens need only a `page.tsx`. Verified with
+  `npm run lint` and `npm run build`; not browser-tested.
+
+- Synced guides with `frontend-next/` source after `b6cf7ce`: listed the Users
+  routes in migration status, marked menu management as legacy-only with shared
+  backend actions, noted the unused `NEXT_PUBLIC_API_URL` example file, and
+  described both Next.js API clients. Source inspection only; no code changed.
+
 - Migrated the typed generated-module runtime and Users list/view/add/edit into
   `frontend-next`, preserving the React controls, form layout, and theme tokens.
   Added normal `app/users` routes and reusable components without staging folders

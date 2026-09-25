@@ -6,8 +6,8 @@
 cards, and the shared React admin shell with role themes, backend-loaded menus,
 and logout confirmation. AuthProvider fetches password policy and announcements,
 but their gates are not ported. Logout clears local state without calling the
-backend logout helper. Users list/view/add/edit and the generated runtime are
-migrated; other module pages remain in the Vite app. See the [Users guide](users-nextjs.md).
+backend logout helper. Users list/view/add/edit, Roles list/add/edit, Profile, and the generated
+runtime are migrated; other module pages remain in the Vite app. See the [Users guide](users-nextjs.md).
 
 The workflows and availability table below describe legacy `frontend/` and the
 shared FastAPI backend. They do not establish Next.js screen availability.
@@ -128,6 +128,15 @@ Do not equate the permission editor with complete per-role authorization.
 The separate edit-permissions/save-permissions actions contain placeholder behavior.
 Role deletion is disabled in the controller's declared actions.
 
+In `frontend-next/`, `components/roles/RolesPage.tsx` renders the list and
+`components/roles/RolesForm.tsx` serves `/roles/add` and `/roles/edit/[id]`, with
+the same requests and payload as the React form. The form now sends only `name`,
+`is_superadmin`, and `theme_color` from the loaded role, plus `id` and `permissions`,
+where the React form also spread the rest of `editRow`. `RolesController` sets
+`use_edit_route` but not `use_add_route`, so the list's New button opens the
+generated inline panel (without the permission grid) in both frontends; `/roles/add`
+is reachable by URL.
+
 ## Menus and branding
 
 The admin sidebar reads active, protected `adm_modules` rows from `/admin_sidebar`.
@@ -159,7 +168,9 @@ reaches the shared CRUD engine. `MenusController.get_index` returns
 each with a one-level `children` list and a `roles` list of `{id, name}`), and
 `inactive_menus` (no children). `frontend/src/pages/modules/menus/index.jsx`
 renders it; the file's own path is its registration, through the
-`import.meta.glob` in `modulePages.js`.
+`import.meta.glob` in `modulePages.js`. This screen is not yet ported to
+`frontend-next/`, which has no `/menus` route; the backend actions below are
+shared by both frontends.
 
 Listing, creation, editing, role assignment, reordering, and moves between
 top-level and child groups are implemented. The page shows active and inactive
@@ -287,10 +298,10 @@ its fields editable.
 | Feature | Current source status |
 | --- | --- |
 | Users and roles | Registered controllers and custom forms |
-| Profile | Implemented API and `/profile` page; see [profile guide](profile-navbar.md) |
+| Profile | Implemented API and `/profile` page in both frontends; see [profile guide](profile-navbar.md) |
 | Change password | Implemented API and `/change-password` page, with history reuse checks |
 | Forced password change | Implemented policy endpoint, waiver endpoint and client gate; the gate is a prompt, not server enforcement |
-| Menu management | Listing, role options, sibling ordering, promotion, nesting of menus without children, and cross-parent child moves are implemented. Creation, editing, and role-pivot saves are implemented; status/role display refresh and inactive dragging have limitations described above. Delete is disabled |
+| Menu management | Listing, role options, sibling ordering, promotion, nesting of menus without children, and cross-parent child moves are implemented. Creation, editing, and role-pivot saves are implemented; status/role display refresh and inactive dragging have limitations described above. Delete is disabled. Legacy `frontend/` only; not yet in Next.js |
 | Notifications module | Registered demonstration actions; not a complete inbox or generated CRUD payload |
 | Module generator | Python `generate()` helper exists; no registered ModulesController admin screen |
 | Settings, API generator, email templates, statistics builder, logs | Seeded entries do not imply implemented controllers |
