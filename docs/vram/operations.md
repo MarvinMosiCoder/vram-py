@@ -43,9 +43,9 @@ The backend default permits only the legacy Vite origin on port 5173. Include
 the actual browser origin if using another hostname or port. The Next.js client
 calls FastAPI directly; `next.config.ts` currently defines no API proxy.
 
-For admin screens not yet migrated, run the same npm commands from `frontend/`
-and open the Vite app, normally at `http://localhost:5173`. See
-[migration status](frontend.md#migration-status) for the available Next.js screens.
+The legacy Vite app in `frontend/` is kept only as a porting reference; run the
+same npm commands there to open it, normally at `http://localhost:5173`. See
+[migration status](frontend.md#migration-status).
 
 `GEMINI_API_KEY` is needed only by [AI chat](ai-chat.md). The client is built on
 first use, so the backend starts without it and the first chat request fails
@@ -106,7 +106,7 @@ together in backups. Uploaded files are not frontend build artifacts.
 | Toast disappears on save | Unexpected browser reload or duplicate provider |
 | Wrong login toast colors | Local `notifyLogin` options; container is outside `.login-theme` |
 | Next.js login blocked by CORS | Backend `CORS_ORIGINS` includes the browser origin, normally `http://localhost:3000` |
-| Admin screen is 404 in Next.js | Check migration status; most admin screens still exist only in `frontend/` |
+| Admin screen is 404 in Next.js | The fallback route serves only `/<path>`, `/<path>/add`, and `/<path>/edit/<id>`; other sub-paths need a custom `app/(admin)/<path>/` page. An inactive or unregistered module errors from the API instead |
 
 Run `npm run lint` and `npm run build` from `frontend-next/` after Next.js changes.
 To serve its production build, run `npm run start` from that directory. For legacy

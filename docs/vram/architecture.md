@@ -20,6 +20,9 @@ Its original guides are in `C:/laragon/www/vram/docs/vram/`.
 | Next.js routes and root providers | `frontend-next/app/`, `frontend-next/app/layout.tsx` |
 | Next.js API helpers | `frontend-next/lib/api.ts`, `frontend-next/lib/http.ts` |
 | Next.js generated runtime and Users forms | `frontend-next/components/modules/`, `frontend-next/components/users/` |
+| Next.js module fallback route | `frontend-next/app/(admin)/[modulePath]/[[...rest]]/page.tsx` |
+| Next.js custom screens | `frontend-next/components/roles/`, `menus/`, `chat/` |
+| Next.js password and announcement gates | `frontend-next/components/auth/` |
 | Next.js auth and toast state | `frontend-next/context/` |
 | Next.js shared controls | `frontend-next/components/` |
 | Next.js admin shell and role theme | `frontend-next/components/layout/`, `frontend-next/context/` |
@@ -30,8 +33,10 @@ Its original guides are in `C:/laragon/www/vram/docs/vram/`.
 
 Static API routers must be registered before the dynamic catch-all. A module
 request resolves an active `adm_modules` row, finds the registered controller,
-and invokes an explicitly decorated `@action` method. The legacy app chooses a custom
-page from `pages/modules/` or falls back to the generated runtime.
+and invokes an explicitly decorated `@action` method. Next.js uses a static
+`app/(admin)/<path>/` folder when one exists and otherwise the fallback route,
+which renders the generated runtime. The legacy app chooses a custom page from
+`pages/modules/` or falls back to the same runtime.
 
 The legacy shell wraps the navbar, sidebar, scrolling content, and footer. The global
 ToastProvider is mounted in `main.jsx` above App so login notifications and
@@ -40,11 +45,8 @@ notifications raised before navigation survive route changes.
 In Next.js, `app/layout.tsx` mounts ToastProvider around AuthProvider and all
 routes. AuthProvider restores the token after mounting and fetches `/me`, password
 policy, and announcements. `app/(admin)/layout.tsx` wraps every signed-in route
-(currently dashboard and Users list/add/edit) with `RequiredAuth`, typed
-theme/sidebar providers, and the copied React shell in `components/layout/`; see
-[shell implementation](frontend.md#shell-implementation). The dashboard renders
-the original cards; backend-loaded sidebar menus and logout confirmation are
-available. Other module pages and
-policy/announcement gates are not yet ported.
+with `RequiredAuth`, typed theme/sidebar providers, the forced password-change
+and announcement gates, and the copied React shell in `components/layout/`; see
+[shell implementation](frontend.md#shell-implementation).
 
 See [Laravel mapping](laravel.md) for source correspondence and port differences.

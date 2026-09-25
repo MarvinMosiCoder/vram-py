@@ -1,7 +1,7 @@
 # Laravel mapping
 
-Frontend paths in the mapping below refer to legacy `frontend/`. New frontend
-work targets `frontend-next/`; most mapped screens are still awaiting migration.
+Frontend paths in the mapping below refer to legacy `frontend/`, which the
+Next.js screens in `frontend-next/` were ported from.
 See [migration status](frontend.md#migration-status).
 
 Original application: `C:/laragon/www/vram`. Original documentation:
@@ -19,7 +19,7 @@ Original application: `C:/laragon/www/vram`. Original documentation:
 | `frontend/src/layout/` | `resources/js/Layouts/layout/` |
 | `backend/app/api/dynamic.py` | `routes/web.php` and its dynamic controller loop |
 | `backend/app/modules/admin/menus_module.py` | `app/Http/Controllers/Admin/MenusController.php` |
-| `frontend/src/pages/modules/menus/index.jsx` | `resources/js/Pages/AdmVram/MenuManagement/MenuManagement.jsx` |
+| `frontend/src/pages/modules/menus/index.jsx` (Next.js `components/menus/`) | `resources/js/Pages/AdmVram/MenuManagement/MenuManagement.jsx` |
 | `adm_menus_roles` | `adm_menus_privileges` |
 | `adm_roles_privileges` | `adm_privileges_roles` |
 
@@ -28,8 +28,9 @@ Original application: `C:/laragon/www/vram`. Original documentation:
 - Laravel/Inertia carries page props and session identity together. This port
   serves the frontend separately and authenticates with JWT. The Next.js app
   uses fetch helpers; the legacy React app uses Axios.
-- Next.js uses App Router. Legacy React Router plus `modulePages.js` replaces
-  Inertia page resolution for admin screens that have not yet migrated.
+- Next.js uses App Router: static `app/(admin)/` folders plus the
+  `[modulePath]/[[...rest]]` fallback replace Inertia page resolution, as React
+  Router plus `modulePages.js` did in the legacy app.
 - SQLAlchemy models explicitly declare columns; database sessions and commits are
   explicit. Alembic replaces Artisan migrations; `seed.py` runs discovered seeders.
 - Python controller actions need `@action`; public method visibility alone does

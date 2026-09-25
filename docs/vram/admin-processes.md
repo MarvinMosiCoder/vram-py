@@ -4,14 +4,14 @@
 
 `frontend-next/` implements login, session restoration, the original dashboard
 cards, and the shared React admin shell with role themes, backend-loaded menus,
-and logout confirmation. AuthProvider fetches password policy and announcements,
-but their gates are not ported. Logout clears local state without calling the
-backend logout helper. Users list/view/add/edit, Roles list/add/edit, Profile, and the generated
-runtime are migrated; other module pages remain in the Vite app. See the [Users guide](users-nextjs.md).
+and logout confirmation. The forced password-change and announcement gates,
+Users, Roles, Profile, Change Password, Menu management, AI chat, and the generated
+runtime are migrated; modules without a custom page use the fallback route.
+Logout clears local state without calling the backend logout helper. See the
+[Users guide](users-nextjs.md) and [migration status](frontend.md#migration-status).
 
-The workflows and availability table below describe legacy `frontend/` and the
-shared FastAPI backend. They do not establish Next.js screen availability.
-See [migration status](frontend.md#migration-status) for current coverage.
+The workflows below apply to both frontends unless a step names one. Legacy file
+names are given where the legacy app remains the reference.
 
 ## Login and logout
 
@@ -52,9 +52,10 @@ Both outcomes return HTTP 200 with `{message, status}` and `status` of
 `status` rather than the status code.
 
 On success the page shows the message, counts down from three in both the toast
-and an inline banner, then clears the token; `ProtectedRoute` redirects to
-`/login` once the user is null. `components/form/ChangePasswordForm.jsx` and
-`hooks/useSignOutCountdown.js` hold the form and the countdown, shared with the
+and an inline banner, then clears the token; the auth wrapper (`RequiredAuth` in
+Next.js, `ProtectedRoute` in legacy) redirects to `/login` once the user is null.
+`components/form/ChangePasswordForm.tsx` and `hooks/useSignOutCountdown.ts`
+(legacy `.jsx`/`.js`) hold the form and the countdown, shared with the
 forced-change modal - the form reports success to its caller rather than
 deciding what happens next, because the modal must not sign the user out after a
 waiver.
@@ -66,7 +67,8 @@ reads `is_default_password` from the policy instead.
 ## Forced password change
 
 After `/me`, AuthContext requests `GET /password-policy` and stores the result.
-`ForcePasswordGate` in `App.jsx` shows a non-dismissible modal whenever
+`ForcePasswordGate` (Next.js `components/auth/`, mounted in `app/(admin)/layout.tsx`;
+legacy `App.jsx`) shows a non-dismissible modal whenever
 `must_change` is set, ahead of the announcement gate; announcements wait until
 the password is resolved, matching the order in Laravel's
 `CheckUserForceChangePassword` middleware.
@@ -99,6 +101,16 @@ resolves to "now" and silently exempts the user; the waiver cap compares `>=`
 rather than the original's `=== 4`, which let a count of 5 waive again; and
 `/check-waive` is not ported, since its inverted boolean `status` is folded into
 `can_waive`.
+
+## Announcements
+
+AuthProvider requests `GET /announcements/unread` after `/me`, and
+`AnnouncementGate` shows the queue one modal at a time, posting
+`/announcements/{id}/read` on Next. Both frontends expect this contract, but the
+backend does not serve it: `backend/app/api/admin/announcements.py` is not
+registered in `routers.py` and does not parse. Both requests fall through to the
+dynamic module router and return 404, so the queue is always empty and the gate
+never shows. A failed read request is logged and the modal still advances.
 
 ## Users
 
@@ -166,10 +178,11 @@ cards with their role assignments, so it declares no `table_fields` and never
 reaches the shared CRUD engine. `MenusController.get_index` returns
 `page_title`, `roles` (`{value, label}` options), `menus` (active top-level rows,
 each with a one-level `children` list and a `roles` list of `{id, name}`), and
-`inactive_menus` (no children). `frontend/src/pages/modules/menus/index.jsx`
-renders it; the file's own path is its registration, through the
-`import.meta.glob` in `modulePages.js`. This screen is not yet ported to
-`frontend-next/`, which has no `/menus` route; the backend actions below are
+`inactive_menus` (no children). In Next.js, `app/(admin)/menus/page.tsx` renders
+`components/menus/MenusPage.tsx`, with `MenuCard.tsx`, `MenuFormFields.tsx`, and
+typed responses in `types.ts`. Legacy `frontend/src/pages/modules/menus/index.jsx`
+is registered through the `import.meta.glob` in `modulePages.js` and also matched
+`/menus/<anything>`; Next.js serves only `/menus`. The backend actions below are
 shared by both frontends.
 
 Listing, creation, editing, role assignment, reordering, and moves between
@@ -254,6 +267,8 @@ Empty selection becomes `[]`. Role visibility is saved in `adm_menus_roles`.
 Both saves use a 15-second timeout and return `{message, status, menu}` on success.
 The `menu` is an ORM row encoded by FastAPI, not the enriched `_serialize()`
 result used by the list endpoint: it does not include `roles` or `children`.
+`post_add` refreshes the row, so Add returns its columns. `post_update` commits
+without a refresh; the expired row encodes as `{}`.
 
 `POST /menus/add` checks create capability and accepts `name`, `type`, `path`,
 `slug`, `icon`, `is_active`, and `roles` (objects with an `id`). It rejects an
@@ -272,8 +287,9 @@ unique names, allowed type/status values, or role payload structure. Existing
 capability-helper limitations still apply to both writes.
 
 On success, Add resets its form and appends the returned row to the active list;
-Edit merges the returned row into the existing active/inactive card and closes
-the modal. Both show a success toast. Object-shaped `detail` errors are retained
+Edit tries to merge the returned row into the existing card by `id`, but because
+the update response is `{}` nothing matches and the card keeps its old values
+until reload. Edit then closes the modal. Both show a success toast. Object-shaped `detail` errors are retained
 for field messages, with `detail.message` used for the toast. Edit inputs and
 modal dismissal are disabled while saving; Add disables its buttons but leaves
 its fields editable.
@@ -301,7 +317,8 @@ its fields editable.
 | Profile | Implemented API and `/profile` page in both frontends; see [profile guide](profile-navbar.md) |
 | Change password | Implemented API and `/change-password` page, with history reuse checks |
 | Forced password change | Implemented policy endpoint, waiver endpoint and client gate; the gate is a prompt, not server enforcement |
-| Menu management | Listing, role options, sibling ordering, promotion, nesting of menus without children, and cross-parent child moves are implemented. Creation, editing, and role-pivot saves are implemented; status/role display refresh and inactive dragging have limitations described above. Delete is disabled. Legacy `frontend/` only; not yet in Next.js |
+| Announcements | Client gates exist in both frontends; the backend endpoints are not served, so none are shown |
+| Menu management | Listing, role options, sibling ordering, promotion, nesting of menus without children, and cross-parent child moves are implemented. Creation, editing, and role-pivot saves are implemented; status/role display refresh and inactive dragging have limitations described above. Delete is disabled. Available in both frontends |
 | Notifications module | Registered demonstration actions; not a complete inbox or generated CRUD payload |
 | Module generator | Python `generate()` helper exists; no registered ModulesController admin screen |
 | Settings, API generator, email templates, statistics builder, logs | Seeded entries do not imply implemented controllers |

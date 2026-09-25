@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Completed the Next.js port of every route the legacy app serves, keeping the
+  legacy markup, classes, and text:
+  - `/menus` (`components/menus/`), with the original drag, save-lock, timeout,
+    and reload behavior. `SelectInput` gained a backward-compatible `isMulti`
+    variant; labels now focus their react-select inputs.
+  - `/chat` (`components/chat/`) with a route `loading.tsx`; added `react-markdown`
+    and `remark-gfm`.
+  - `/change-password`, plus the forced password-change and announcement gates
+    mounted in `app/(admin)/layout.tsx`. The toast `duration` accepts `false`.
+  - `app/(admin)/[modulePath]/[[...rest]]/page.tsx` replaces legacy `ModuleRoute`
+    for modules without a custom page; unknown sub-paths show the not-found page.
+  - `components/system/DocumentTitle.tsx` sets `<app name> | <page>` tab titles.
+  Password-reset pages, which legacy never routed, and unused legacy toast
+  components were not ported. Recorded two backend gaps without changing the
+  backend: the announcement endpoints are not served, and `POST /menus/update`
+  returns `menu: {}`, so edited cards refresh only on reload.
+  `npm run lint` and `npm run build` pass. A mocked Chrome check at 1280px and 390px
+  loaded `/menus`, `/chat`, `/change-password`, a fallback module, the not-found
+  page, and both gates with no page errors, horizontal overflow, or write
+  requests. Drag-and-drop, saves, and sending chat messages were not exercised,
+  and no real API or database calls were made.
+
 - Ported Roles to `frontend-next`: `/roles` list, `/roles/add`, and `/roles/edit/[id]`
   (`components/roles/RolesPage.tsx`, `RolesForm.tsx`) plus a typed `components/form/Card.tsx`.
   Select-all state is now derived on render instead of synced by an effect, and the

@@ -1,7 +1,7 @@
 # AI chat
 
-The composer UI remains in legacy `frontend/`; no chat route has been ported to
-`frontend-next/`. Backend contracts below remain shared. See
+The chat UI runs at `/chat` in `frontend-next/`, ported from legacy `frontend/`
+with the same markup and behavior. Backend contracts below are shared. See
 [migration status](frontend.md#migration-status).
 
 This guide owns the chat assistant: the endpoints, prompt construction,
@@ -19,8 +19,9 @@ here rather than repeating any of it.
 | `backend/app/core/redis_client.py` | Optional shared Redis client for the limiter and cache |
 | `backend/app/models/admin/chat_conversations.py` | The `chat_conversations` table |
 | `backend/app/schemas/admin/chat.py` | `ChatRequest`, `ChatMessage`, `ChatConversationsOut` |
-| `frontend/src/pages/chat/Chat.jsx` | Transcript, conversation rail, composer; lazy-loaded in `App.jsx` |
-| `frontend/src/pages/chat/MarkdownMessage.jsx` | Renders assistant replies as themed markdown |
+| `frontend-next/components/chat/Chat.tsx` | Transcript, conversation rail, composer (legacy `frontend/src/pages/chat/Chat.jsx`) |
+| `frontend-next/components/chat/MarkdownMessage.tsx` | Renders assistant replies as themed markdown with `react-markdown` and `remark-gfm` |
+| `frontend-next/app/(admin)/chat/page.tsx`, `loading.tsx` | Route and its spinner fallback; Next.js splits the route's code the way `React.lazy` did in legacy `App.jsx` |
 
 `chat.router` is registered in `backend/app/api/routers.py` ahead of the dynamic
 module router. The same module also serves the `GET /` health check.

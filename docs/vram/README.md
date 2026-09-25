@@ -1,9 +1,8 @@
 # VRAM documentation
 
-Project guides live here. The active frontend migration targets `frontend-next/`
-(Next.js); `frontend/` retains the legacy React/Vite admin implementation.
-Start with [migration status](frontend.md#migration-status) to distinguish
-ported features from legacy-only screens. Choose the guide for the task:
+Project guides live here. The frontend is `frontend-next/` (Next.js); `frontend/`
+keeps the legacy React/Vite implementation as a porting reference. See
+[migration status](frontend.md#migration-status) for coverage. Choose the guide for the task:
 
 | Guide | Responsibility |
 | --- | --- |

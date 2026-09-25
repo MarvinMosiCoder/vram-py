@@ -1,10 +1,10 @@
 # VRAM Next.js frontend
 
-Active Next.js App Router migration of the React/Vite app in `../frontend/`,
-using TypeScript, React, and Tailwind v4 with the existing FastAPI backend.
-Login, session restoration, shared toasts, the original React admin shell, role
-themes, and dashboard are present. Module pages and password/announcement gates
-are still awaiting migration.
+Next.js App Router port of the React/Vite app in `../frontend/`, using
+TypeScript, React, and Tailwind v4 with the existing FastAPI backend. It covers
+every route the legacy app serves: login, dashboard, Users, Roles, Profile,
+Change Password, Menu management, AI chat, a fallback route for other generated
+modules, and the forced password-change and announcement gates.
 
 See [migration status and frontend guidance](../docs/vram/frontend.md) and
 [project documentation](../docs/vram/README.md).
@@ -30,14 +30,15 @@ API URL environment variable.
 - `context/`: auth and toast providers mounted by `app/layout.tsx`.
 - `components/`: typed shared controls, navigation, and admin shell.
 - `lib/api.ts`: typed fetch helpers for FastAPI.
-- `app/dashboard/layout.tsx`: authenticated shared layout, using the existing
-  `components/auth/RequiredAuth.tsx` wrapper.
+- `app/(admin)/layout.tsx`: authenticated shared layout for every admin route,
+  using `components/auth/RequiredAuth.tsx` and the gates in `components/auth/`.
+- `app/(admin)/[modulePath]/[[...rest]]/page.tsx`: generated-module fallback.
 - `components/layout/`: shell regions and authenticated providers.
 - `config/themeOptions.ts`: role palette calculations.
 - `lib/http.ts`: Axios client sharing the current auth token.
 - `types/admin.ts`: menu and notification response types.
 
-The dashboard is implemented directly in `app/dashboard/page.tsx`. Components
+The dashboard is implemented directly in `app/(admin)/dashboard/page.tsx`. Components
 use Next.js navigation and TSX; there is no separate migration component tree.
 
 Branding assets are copied into `public/images/settings/`. Profile images use a

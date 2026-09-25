@@ -18,7 +18,8 @@ type ToastContextType = {
   handleToast: (
     message: unknown,
     messageType?: MessageType,
-    duration?: number,
+    // false disables autoClose, as react-toastify's own option does.
+    duration?: number | false,
     ...callbacks: ToastCallback[]
   ) => Id | undefined;
 };
@@ -51,7 +52,7 @@ export function formatToastMessage(message: unknown): string {
 export function showToast(
   message: unknown,
   messageType: MessageType = "default",
-  duration = 3000,
+  duration: number | false = 3000,
   ...callbacks: ToastCallback[]
 ): Id | undefined {
   const type = messageType === "danger"

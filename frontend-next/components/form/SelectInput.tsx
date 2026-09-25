@@ -1,21 +1,31 @@
 "use client";
 
-import { useId, type SelectHTMLAttributes } from "react";
-import Select, { type ClassNamesConfig, type SingleValue } from "react-select";
+import { useId, type JSX, type SelectHTMLAttributes } from "react";
+import Select, { type ClassNamesConfig, type MultiValue, type SingleValue } from "react-select";
 import type { SelectOption } from "@/types/modules";
 
 type NativeProps = Omit<SelectHTMLAttributes<HTMLSelectElement>, "type"> & {
   type?: ""; options?: SelectOption[]; placeholder?: string;
 };
 type SearchableProps = {
-  type: "react-select"; value: SelectOption | null; options: SelectOption[];
+  type: "react-select"; isMulti?: false; value: SelectOption | null; options: SelectOption[];
   onChange: (option: SingleValue<SelectOption>) => void; disabled?: boolean;
   placeholder?: string; className?: string; inputId?: string; "aria-label"?: string;
 };
+// The legacy SelectInput forwarded `isMulti` to react-select through its prop
+// spread; the menus page's role picker relies on it.
+type SearchableMultiProps = Omit<SearchableProps, "isMulti" | "value" | "onChange"> & {
+  isMulti: true; value: readonly SelectOption[];
+  onChange: (options: MultiValue<SelectOption>) => void;
+};
 
-export default function SelectInput(props: NativeProps | SearchableProps) {
+// Overloads rather than one union parameter, so single-select callers keep
+// their contextually typed onChange.
+export default function SelectInput(props: NativeProps | SearchableProps): JSX.Element;
+export default function SelectInput(props: SearchableMultiProps): JSX.Element;
+export default function SelectInput(props: NativeProps | SearchableProps | SearchableMultiProps) {
   const instanceId = useId();
-    const selectClasses: ClassNamesConfig<SelectOption, false> = {
+    const selectClasses: ClassNamesConfig<SelectOption, boolean> = {
         control: ({ isFocused, isDisabled }) => `flex min-h-10 rounded-md border bg-skin-bg text-sm text-skin-text ${isFocused ? "border-skin-accent ring-1 ring-skin-accent" : "border-skin-border hover:border-skin-accent"} ${isDisabled ? "opacity-50" : ""}`,
         valueContainer: () => "flex flex-wrap gap-1 px-3 py-2",
         input: () => "text-skin-text",
@@ -35,6 +45,16 @@ export default function SelectInput(props: NativeProps | SearchableProps) {
         loadingMessage: () => "p-3 text-skin-dim",
     };
 
+  if (props.type === "react-select" && props.isMulti) {
+    return <Select<SelectOption, true>
+      isMulti
+      instanceId={instanceId} inputId={props.inputId} aria-label={props["aria-label"]}
+      value={props.value} onChange={props.onChange} options={props.options}
+      isDisabled={props.disabled} placeholder={props.placeholder}
+      className={`block w-full rounded-md sm:text-sm ${props.className ?? ""}`.trim()}
+      unstyled classNames={selectClasses}
+    />;
+  }
   if (props.type === "react-select") {
     return <Select<SelectOption, false>
       instanceId={instanceId} inputId={props.inputId} aria-label={props["aria-label"]}

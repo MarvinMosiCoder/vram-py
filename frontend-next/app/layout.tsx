@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ToastProvider } from "@/context/toastContext";
 import { AuthProvider } from "@/context/authContext";
+import DocumentTitle from "@/components/system/DocumentTitle";
 
 export const metadata: Metadata = {
   title: "Vram Admin",
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-full flex flex-col">
         <ToastProvider>
+          <DocumentTitle />
           <AuthProvider>{children}</AuthProvider>
         </ToastProvider>
       </body>

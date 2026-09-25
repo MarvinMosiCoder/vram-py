@@ -43,10 +43,10 @@ them. There is no `legacy` directory. `(admin)` is a route group: its name is no
 of the URL, so `app/(admin)/users` still serves `/users`. `[id]` means a
 dynamic URL segment: `/users/edit/2` supplies `id = "2"`.
 
-For another generated module, add its route under `app/(admin)/`, then render
-`<GeneratedModulePage modulePath="your-path" />`. Put custom behavior in a
-feature wrapper, not in the shared runtime. Create add/edit pages when the
-controller enables `use_add_route`/`use_edit_route`; otherwise forms open inline.
+Another generated module needs no route: `app/(admin)/[modulePath]/[[...rest]]/page.tsx`
+renders `<GeneratedModulePage>` for `/<path>`, `/<path>/add`, and `/<path>/edit/<id>`.
+Add a folder under `app/(admin)/` only for custom behavior, and put that behavior in
+a feature wrapper, not in the shared runtime.
 
 ## Why the backend folder is called modules
 
@@ -86,5 +86,5 @@ start `npm run start -- --port 3100`, make Playwright and Chrome available, and 
 `PLAYWRIGHT_MODULE` to that package path. The script intercepts all port-8080 API
 requests and checks desktop/mobile flows without writing real users.
 
-Roles, menu management, profile pages, and password/announcement gates still
-need migration; the [status table](frontend.md#migration-status) tracks coverage.
+The other admin screens are migrated too; the [status table](frontend.md#migration-status)
+tracks coverage.

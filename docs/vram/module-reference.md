@@ -55,7 +55,7 @@ Only methods marked `@action` are routable.
 
 These hooks are available in the typed Next.js runtime as well as the original
 React runtime. Next.js requires an explicit `modulePath`; route params are passed
-from the corresponding `app/` page. See [migration status](frontend.md#migration-status).
+from the module's own `app/` page or from the `[modulePath]/[[...rest]]` fallback. See [migration status](frontend.md#migration-status).
 
 | Prop | Use |
 | --- | --- |
