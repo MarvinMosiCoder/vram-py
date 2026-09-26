@@ -1,0 +1,77 @@
+[
+  {
+    "chainId": "solana",
+    "dexId": "raydium",
+    "url": "https://dexscreener.com/solana/7jfemns8yjnzvmiuuj4dadx7nln6epqszjepas2zmbbr",
+    "pairAddress": "7jFEmns8yjNZVMiuUj4dADx7nLn6EpQszJepaS2zMbbr",
+    "labels": [
+      "CPMM"
+    ],
+    "baseToken": {
+      "address": "2KjgagqiBaR564BrJXE5KjHaxEPTW5pSgLHVn9k8VHwZ",
+      "name": "Gertrude’s Cat",
+      "symbol": "FLUFFS"
+    },
+    "quoteToken": {
+      "address": "HTmQz7My6MehV7bjhJ6jde8nDND1yvsz68d24LP7YgUQ",
+      "name": "RuneScape Gold",
+      "symbol": "GP"
+    },
+    "priceNative": "0.004114",
+    "priceUsd": "0.00004248",
+    "txns": {
+      "m5": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h1": {
+        "buys": 3,
+        "sells": 0
+      },
+      "h6": {
+        "buys": 170,
+        "sells": 6
+      },
+      "h24": {
+        "buys": 260,
+        "sells": 60
+      }
+    },
+    "volume": {
+      "h24": 12962.7,
+      "h6": 4119.82,
+      "h1": 20.77,
+      "m5": 0
+    },
+    "priceChange": {
+      "h1": 5.31,
+      "h6": 229,
+      "h24": 17.47
+    },
+    "liquidity": {
+      "usd": 10618.18,
+      "base": 124970778,
+      "quote": 514224
+    },
+    "fdv": 42483,
+    "marketCap": 42483,
+    "pairCreatedAt": 1790346481000,
+    "info": {
+      "imageUrl": "https://cdn.dexscreener.com/cms/images/nPKkeImdEHL6VM59?width=800&height=800&quality=95&format=auto",
+      "header": "https://cdn.dexscreener.com/cms/images/b_n9Op9uaLr6xbjq?width=1500&height=500&quality=95&format=auto",
+      "openGraph": "https://cdn.dexscreener.com/token-images/og/solana/2KjgagqiBaR564BrJXE5KjHaxEPTW5pSgLHVn9k8VHwZ?timestamp=1790410200000",
+      "websites": [
+        {
+          "url": "https://runescape.wiki/w/Fluffs",
+          "label": "Website"
+        }
+      ],
+      "socials": [
+        {
+          "url": "https://x.com/GPonchain",
+          "type": "twitter"
+        }
+      ]
+    }
+  }
+]

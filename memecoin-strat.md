@@ -174,60 +174,82 @@ what it teaches in Python or Next.js. Finish a phase before starting the next.
 
 ### Phase 0: Setup
 
-- [ ] Create a separate `memecoin-analyzer` repo with `backend/` and `frontend/` folders.
-- [ ] Backend: create a Python virtual environment and install `fastapi`, `uvicorn`,
-      `httpx`, `pydantic`, `python-dotenv`, and `pytest`.
-- [ ] Frontend: run `npx create-next-app@latest frontend` (TypeScript, App Router, Tailwind).
-- [ ] Add `backend/.env` for API keys and make sure `.gitignore` excludes it.
-- [ ] Get a Gemini API key from Google AI Studio and a free Helius key.
+Built inside vram-py instead of a separate repo (decided 2026-09-26). It reuses
+the FastAPI backend (port 8080), `frontend-next/`, the Gemini setup from AI
+chat, and Postgres with Alembic.
 
-Done when: `uvicorn` serves a hello-world route and `npm run dev` shows the Next.js page.
-Learn: virtual environments, pip, environment variables, project layout.
+- [x] Add `httpx` and `pytest` to `backend/requirements.txt`.
+- [x] Gemini API key: already configured for AI chat, and shares its free quota.
+- [ ] Get a free Helius key (needed from Phase 7).
 
 ### Phase 1: Fetch coin data (plain Python scripts, no web app yet)
 
-- [ ] Search a coin name on DexScreener
+Implemented state is documented in [docs/vram/memecoin.md](docs/vram/memecoin.md).
+
+- [x] Search a coin name on DexScreener
       (`https://api.dexscreener.com/latest/dex/search?q=<name>`) and print each
       match's chain, contract, liquidity, volume, and pair age.
-- [ ] Handle several coins sharing one name: sort by liquidity and let the user pick.
-- [ ] Fetch a RugCheck report for a Solana mint: mint authority, freeze authority,
-      LP locked/burned, top holders. Check RugCheck's API docs for which endpoints need a key.
-- [ ] Calculate top-10 holder share.
-- [ ] Define Pydantic models for each result (`TokenInfo`, `MarketData`, `SafetyData`).
-- [ ] Run the collectors in parallel with `asyncio.gather`, with timeouts, so one
+- [x] Handle several coins sharing one name and let the user pick. Sorted by
+      24h volume instead of liquidity, because liquidity is easy to fake.
+- [x] Fetch a RugCheck report for a Solana mint: mint authority, freeze authority,
+      LP locked/burned, top holders. The report endpoint needs no key.
+- [x] Calculate top-10 holder share, skipping pools (`AMM` holders).
+- [x] Define Pydantic models: `PoolData`, `MarketData`, `Holder`, `Risk`,
+      `SafetyData`. No separate `TokenInfo`: `MarketData` carries the identity.
+- [x] Run the collectors in parallel with `asyncio.gather`, with timeouts, so one
       failing API doesn't crash the whole check.
-- [ ] Save real API responses as JSON files to use as test data.
+- [x] Save real API responses as JSON files to use as test data (`--save`).
 
-Done when: `python check.py <coin name>` prints the collected data for a real coin.
+Done when: `python -m app.helpers.memecoin.check <coin name>`, run from
+`backend/`, prints the collected data for a real coin.
 Learn: `async`/`await`, `httpx`, JSON, Pydantic, error handling.
 
 ### Phase 2: Rule engine
 
-- [ ] Write rules as data: name, check function, severity (`fail` / `warn`), message.
-- [ ] Hard fails: mint authority enabled, freeze authority enabled, LP not
-      locked/burned, top 10 holders over 30%, liquidity below a minimum.
-- [ ] Warnings: pair younger than 24 hours, low volume, few holders.
-- [ ] Turn the results into a 0–100 risk score and a verdict (Avoid / High risk / Watch).
-- [ ] Write `pytest` tests that feed the saved JSON files through the rules.
+The rules, thresholds, and scoring as built are in
+[docs/vram/memecoin.md](docs/vram/memecoin.md#rule-engine).
+
+- [x] Write rules as data: name, check function, severity (`fail` / `warn`), message.
+      A missing source makes a rule unchecked, never passed.
+- [x] Hard fails: mint authority enabled, freeze authority enabled, LP not
+      locked/burned, top 10 holders over 30%, liquidity below a minimum. The LP
+      and top-10 rules only warn for coins 30+ days old, which Bonk needed. Added
+      `rugged` and `creator_rugged_before` (RugCheck's creator rug history).
+- [x] Warnings: pair younger than 24 hours, low volume, few holders. Added thin
+      liquidity, creator holdings, insiders, transfer fee, and mutable metadata.
+- [x] Turn the results into a 0–100 risk score and a verdict (Avoid / High risk / Watch).
+- [x] Write `pytest` tests that feed the saved JSON files through the rules.
 
 Done when: the script prints a score, verdict, and list of red flags, and the tests pass.
 Learn: functions as data, dataclasses/Pydantic, unit testing.
 
 ### Phase 3: FastAPI backend
 
-- [ ] `GET /api/search?q=<name>` returns the matching coins.
-- [ ] `GET /api/analyze/{chain}/{address}` returns the full report as JSON.
-- [ ] Use Pydantic response models so `/docs` documents the API.
-- [ ] Allow CORS from `http://localhost:3000`.
-- [ ] Cache reports in memory for a few minutes to save API calls.
+Routes live in `backend/app/api/admin/memecoin.py`, included in `routers.py`
+before the dynamic module router. The auth middleware requires a login for
+them, and CORS already allows `http://localhost:3000`.
 
-Done when: both endpoints work from `http://localhost:8000/docs`.
+- [x] Move report building into `backend/app/helpers/memecoin/analyzer.py`, shared
+      by `check.py` and the routes, with a `CoinReport` response model.
+- [x] `GET /memecoin/search?q=<name>` returns the matching coins.
+- [x] `GET /memecoin/analyze/{chain}/{address}` returns the full report as JSON.
+- [x] Use Pydantic response models so `/docs` documents the API.
+- [ ] Route tests in `backend/tests/test_memecoin_routes.py` (next: router alone in
+      a `TestClient`, login and network replaced).
+- [ ] Try both endpoints from `/docs` after Authorize.
+- [ ] Cache reports in memory for a few minutes to save API calls, and handle
+      RugCheck's HTTP 429.
+
+Done when: both endpoints work from `http://localhost:8080/docs` after Authorize.
 Learn: routes, path/query parameters, response models, CORS.
 
 ### Phase 4: Next.js frontend
 
-- [ ] Home page: a search box that calls `/api/search` and lists the matches.
-- [ ] Report page at `/coin/[chain]/[address]`: score, verdict badge, red flags,
+Pages go under `frontend-next/app/(admin)/memecoin/`, inside the admin shell,
+and call the API through `lib/http.ts`. Add the sidebar link on `/menus`.
+
+- [ ] Search page at `/memecoin`: a search box that calls `/memecoin/search` and lists the matches.
+- [ ] Report page at `/memecoin/[chain]/[address]`: score, verdict badge, red flags,
       and links to DexScreener, RugCheck, and Solscan.
 - [ ] Loading and error states.
 - [ ] TypeScript types matching the backend's report JSON.

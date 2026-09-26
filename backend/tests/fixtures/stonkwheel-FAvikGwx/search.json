@@ -1,0 +1,141 @@
+[
+  {
+    "chainId": "solana",
+    "dexId": "meteora",
+    "url": "https://dexscreener.com/solana/a8svzbnvhcbda9neqee5wakoktj7lb8tlbwsfdjafjxv",
+    "pairAddress": "A8SvZBnvhCbdA9NeQeE5WakoktJ7Lb8TLbWSfdjaFjxv",
+    "labels": [
+      "DYN2"
+    ],
+    "baseToken": {
+      "address": "FAvikGwxvHEtVqthaSJCHC3dLnp6HWxr5uLutWMoxqYZ",
+      "name": "STONKWHEEL",
+      "symbol": "STONKWHEEL"
+    },
+    "quoteToken": {
+      "address": "So11111111111111111111111111111111111111112",
+      "name": "Wrapped SOL",
+      "symbol": "SOL"
+    },
+    "priceNative": "0.00000005318",
+    "priceUsd": "0.000006415",
+    "txns": {
+      "m5": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h1": {
+        "buys": 0,
+        "sells": 2
+      },
+      "h6": {
+        "buys": 0,
+        "sells": 5
+      },
+      "h24": {
+        "buys": 0,
+        "sells": 5
+      }
+    },
+    "volume": {
+      "h24": 0.62,
+      "h6": 0.62,
+      "h1": 0.2,
+      "m5": 0
+    },
+    "priceChange": {
+      "h1": -39.12,
+      "h6": -64.16,
+      "h24": -64.16
+    },
+    "liquidity": {
+      "usd": 1.53,
+      "base": 127386,
+      "quote": 0.005979
+    },
+    "fdv": 6415,
+    "marketCap": 6415,
+    "pairCreatedAt": 1790404710000,
+    "info": {
+      "imageUrl": "https://cdn.dexscreener.com/cms/images/xYEqcHMCMAbki410?width=800&height=800&quality=95&format=auto",
+      "header": "https://cdn.dexscreener.com/cms/images/lq_a2gohw8ywFw_C?width=1500&height=500&quality=95&format=auto",
+      "openGraph": "https://cdn.dexscreener.com/token-images/og/solana/FAvikGwxvHEtVqthaSJCHC3dLnp6HWxr5uLutWMoxqYZ?timestamp=1790409900000",
+      "websites": [],
+      "socials": [
+        {
+          "url": "https://x.com/LaunchOnSF/status/2103735185229369744",
+          "type": "twitter"
+        }
+      ]
+    }
+  },
+  {
+    "chainId": "solana",
+    "dexId": "meteora",
+    "url": "https://dexscreener.com/solana/31cykj9qbywrki1mzraavvpamphabnnx1ebpokj47xhh",
+    "pairAddress": "31cYKJ9qbYwrki1MZRAaVvPampHABNnx1eBPokJ47XHH",
+    "labels": [
+      "DYN2"
+    ],
+    "baseToken": {
+      "address": "FAvikGwxvHEtVqthaSJCHC3dLnp6HWxr5uLutWMoxqYZ",
+      "name": "STONKWHEEL",
+      "symbol": "STONKWHEEL"
+    },
+    "quoteToken": {
+      "address": "So11111111111111111111111111111111111111112",
+      "name": "Wrapped SOL",
+      "symbol": "SOL"
+    },
+    "priceNative": "0.00000007552",
+    "priceUsd": "0.000009091",
+    "txns": {
+      "m5": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h1": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h6": {
+        "buys": 1,
+        "sells": 5
+      },
+      "h24": {
+        "buys": 1,
+        "sells": 5
+      }
+    },
+    "volume": {
+      "h24": 0.93,
+      "h6": 0.93,
+      "h1": 0,
+      "m5": 0
+    },
+    "priceChange": {
+      "h6": -64.44,
+      "h24": -64.44
+    },
+    "liquidity": {
+      "usd": 0.09,
+      "base": 1e-06,
+      "quote": 0.0007799
+    },
+    "fdv": 9092,
+    "marketCap": 9092,
+    "pairCreatedAt": 1790404731000,
+    "info": {
+      "imageUrl": "https://cdn.dexscreener.com/cms/images/xYEqcHMCMAbki410?width=800&height=800&quality=95&format=auto",
+      "header": "https://cdn.dexscreener.com/cms/images/lq_a2gohw8ywFw_C?width=1500&height=500&quality=95&format=auto",
+      "openGraph": "https://cdn.dexscreener.com/token-images/og/solana/FAvikGwxvHEtVqthaSJCHC3dLnp6HWxr5uLutWMoxqYZ?timestamp=1790409900000",
+      "websites": [],
+      "socials": [
+        {
+          "url": "https://x.com/LaunchOnSF/status/2103735185229369744",
+          "type": "twitter"
+        }
+      ]
+    }
+  }
+]

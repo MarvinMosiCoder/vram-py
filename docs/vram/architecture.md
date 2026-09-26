@@ -17,6 +17,7 @@ Its original guides are in `C:/laragon/www/vram/docs/vram/`.
 | Module discovery | `backend/app/modules/registry.py` |
 | Admin controller metadata | `backend/app/modules/admin/` |
 | Models and seeders | `backend/app/models/admin/`, `backend/app/seeders/` |
+| Memecoin analyzer core, rules, and command line | `backend/app/helpers/memecoin/`, routes in `backend/app/api/admin/memecoin.py`, tests in `backend/tests/`; see [memecoin analyzer](memecoin.md) |
 | Next.js routes and root providers | `frontend-next/app/`, `frontend-next/app/layout.tsx` |
 | Next.js API helpers | `frontend-next/lib/api.ts`, `frontend-next/lib/http.ts` |
 | Next.js generated runtime and Users forms | `frontend-next/components/modules/`, `frontend-next/components/users/` |

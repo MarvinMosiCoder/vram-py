@@ -110,3 +110,9 @@ See [notifications](notifications.md) for rendering conventions.
 
 `POST /chat` and the `GET /chat/conversations` endpoints, with their request and
 response fields, are documented in the [AI chat](ai-chat.md) guide.
+
+## Memecoin analyzer
+
+`GET /memecoin/search` and `GET /memecoin/analyze/{chain}/{address}`, with their
+parameters, status codes, and the `CoinReport` response, are documented in the
+[memecoin analyzer](memecoin.md#api) guide.

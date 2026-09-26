@@ -321,6 +321,7 @@ its fields editable.
 | Menu management | Listing, role options, sibling ordering, promotion, nesting of menus without children, and cross-parent child moves are implemented. Creation, editing, and role-pivot saves are implemented; status/role display refresh and inactive dragging have limitations described above. Delete is disabled. Available in both frontends |
 | Notifications module | Registered demonstration actions; not a complete inbox or generated CRUD payload |
 | Module generator | Python `generate()` helper exists; no registered ModulesController admin screen |
+| Memecoin analyzer | Command-line check with rule engine and verdict, plus `/memecoin/search` and `/memecoin/analyze` API routes (login required, not cached, not yet tried with a real login); the `/memecoin` page is an empty placeholder. See [memecoin analyzer](memecoin.md#status) |
 | Settings, API generator, email templates, statistics builder, logs | Seeded entries do not imply implemented controllers |
 
 An active seeded row with no registered controller returns HTTP 500. Check

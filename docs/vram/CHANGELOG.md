@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+- Started Phase 3 of the [memecoin analyzer](memecoin.md#api). Report building
+  moved from `check.py` into `backend/app/helpers/memecoin/analyzer.py`, shared
+  by the command line and the new router, with a `CoinReport` response schema.
+  `backend/app/api/admin/memecoin.py` serves `GET /memecoin/search` and
+  `GET /memecoin/analyze/{chain}/{address}`, included in `routers.py` before the
+  dynamic router. Added `tests/test_analyzer.py`; `pytest` passes 19 tests. The
+  routes were checked against the full application with login and external APIs
+  replaced by saved data (200 for both routes, 422 for a wrong chain or an EVM
+  address, 401 without a token); they have not been tried with a real login on
+  the running server. Route tests, caching, and RugCheck 429 handling remain.
+  Recorded that saved fixtures are snapshots: re-saving `epump` breaks a test
+  because the coin has left its pump.fun bonding curve.
+
+- Added Phase 2 of the [memecoin analyzer](memecoin.md#rule-engine): a rule engine
+  in `backend/app/helpers/memecoin/rules.py` with 15 rules as data, a 0-100 risk
+  score, and an Avoid / High risk / Watch verdict, printed first by the `check`
+  command. Rules with missing data are reported as unchecked and keep the verdict
+  at High risk or worse. `SafetyData` gained `total_market_liquidity`, and the
+  schemas gained `Finding` and `Assessment`. Added `backend/pytest.ini` and 17
+  tests on four saved coins. The first test run found `HIGH_RISK_SCORE` set to 4
+  and RugCheck's 0 liquidity for a coin with no indexed pools read as $0; both
+  are fixed. Verified with `pytest` (17 passed) and live checks of Bonk, a new
+  pump.fun coin, and a coin whose creator has a rug history, plus a forced
+  RugCheck timeout. No API route, page, or database change was made.
+
+- Added Phase 1 of the [memecoin analyzer](memecoin.md): DexScreener and RugCheck
+  collectors in `backend/app/helpers/memecoin/`, Pydantic schemas in
+  `schemas/admin/memecoin.py` (re-exported from `app.schemas`), a `check`
+  command that collects both sources in parallel, and `--save` fixtures under
+  `backend/tests/fixtures/`. Added `httpx` and `pytest` to `requirements.txt`.
+  The API router and the `/memecoin` page exist only as empty placeholders.
+  Verified by running the command against the live APIs for Bonk and a new
+  pump.fun coin, forcing a RugCheck timeout to check that the market section
+  still prints, and reloading saved fixtures through the summarize functions.
+  No automated tests exist yet; no Next.js build or database change was made.
+
 - Completed the Next.js port of every route the legacy app serves, keeping the
   legacy markup, classes, and text:
   - `/menus` (`components/menus/`), with the original drag, save-lock, timeout,

@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.admin import auth, dashboard, sidebar, admin, editor, profile, system, chat, changepassword
+from app.api.admin import auth, dashboard, sidebar, admin, editor, profile, system, chat, changepassword, memecoin
 from app.api import dynamic
 
 # Each feature area owns its own APIRouter (see admin/auth.py,
@@ -17,6 +17,7 @@ router.include_router(profile.router)
 router.include_router(system.router)
 router.include_router(chat.router)
 router.include_router(changepassword.router)
+router.include_router(memecoin.router)
 
 
 # MUST stay last. "/{module_path}" matches any single-segment path, so

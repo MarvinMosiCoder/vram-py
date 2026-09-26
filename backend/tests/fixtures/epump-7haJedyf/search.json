@@ -1,0 +1,73 @@
+[
+  {
+    "chainId": "solana",
+    "dexId": "pumpfun",
+    "url": "https://dexscreener.com/solana/6jyqnt1leihcyhkaxkce7jcjhiuuvq8zumqdqpq4h3bl",
+    "pairAddress": "6jyQnT1LeiHcyHkaXKCE7JcjHiUuVQ8zumqdqPQ4H3BL",
+    "baseToken": {
+      "address": "7haJedyf6kQbiDNqzg31pyKQULm1qdeKAYd5VfAhpump",
+      "name": "Effective Pump",
+      "symbol": "e/pump"
+    },
+    "quoteToken": {
+      "address": "So11111111111111111111111111111111111111112",
+      "name": "Wrapped SOL",
+      "symbol": "SOL"
+    },
+    "priceNative": "0.0000002425",
+    "priceUsd": "0.00002926",
+    "txns": {
+      "m5": {
+        "buys": 35,
+        "sells": 24
+      },
+      "h1": {
+        "buys": 652,
+        "sells": 361
+      },
+      "h6": {
+        "buys": 2050,
+        "sells": 1468
+      },
+      "h24": {
+        "buys": 2050,
+        "sells": 1468
+      }
+    },
+    "volume": {
+      "h24": 165648.06,
+      "h6": 165648.06,
+      "h1": 52695.22,
+      "m5": 3427.19
+    },
+    "priceChange": {
+      "m5": -7.51,
+      "h1": 332,
+      "h6": 542,
+      "h24": 542
+    },
+    "fdv": 29267.8,
+    "marketCap": 29267.8,
+    "pairCreatedAt": 1790404396000,
+    "info": {
+      "imageUrl": "https://cdn.dexscreener.com/cms/images/k6nLfd32Zc9WSkVc?width=800&height=800&quality=95&format=auto",
+      "header": "https://cdn.dexscreener.com/cms/images/rn_teQPon5rST-uK?width=1500&height=500&quality=95&format=auto",
+      "openGraph": "https://cdn.dexscreener.com/token-images/og/solana/7haJedyf6kQbiDNqzg31pyKQULm1qdeKAYd5VfAhpump?timestamp=1790409300000",
+      "websites": [
+        {
+          "url": "https://www.e-pump.app/",
+          "label": "Website"
+        }
+      ],
+      "socials": [
+        {
+          "url": "https://x.com/epump_app",
+          "type": "twitter"
+        }
+      ]
+    },
+    "boosts": {
+      "active": 30
+    }
+  }
+]
