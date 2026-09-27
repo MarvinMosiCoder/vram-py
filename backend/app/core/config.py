@@ -19,4 +19,9 @@ class Settings(BaseSettings):
     # docs/vram/ai-chat.md#stub-mode.
     CHAT_FAKE: bool = False
 
+    # Memecoin watch alerts (Phase 9). Both set: each new alert is also sent to
+    # this Telegram chat. Either missing: alerts stay on the Watch page only.
+    TELEGRAM_BOT_TOKEN: str | None = None
+    TELEGRAM_CHAT_ID: str | None = None
+
 settings = Settings()

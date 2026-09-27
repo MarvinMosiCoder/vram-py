@@ -1,0 +1,264 @@
+[
+  {
+    "chainId": "bsc",
+    "dexId": "pancakeswap",
+    "url": "https://dexscreener.com/bsc/0xff0a8df8c4a0332e28a4c94ebb3f633944b08a94",
+    "pairAddress": "0xff0A8df8c4A0332E28a4c94EBB3f633944B08a94",
+    "labels": [
+      "v2"
+    ],
+    "baseToken": {
+      "address": "0x6331BF8D601f0D7F0d2101772af5137c418c4444",
+      "name": "Binance Super Cycle",
+      "symbol": "BSC"
+    },
+    "quoteToken": {
+      "address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+      "name": "Wrapped BNB",
+      "symbol": "WBNB"
+    },
+    "priceNative": "0.0000001449",
+    "priceUsd": "0.0001118",
+    "txns": {
+      "m5": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h1": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h6": {
+        "buys": 0,
+        "sells": 2
+      },
+      "h24": {
+        "buys": 10,
+        "sells": 11
+      }
+    },
+    "volume": {
+      "h24": 3247.92,
+      "h6": 4.17,
+      "h1": 0,
+      "m5": 0
+    },
+    "priceChange": {
+      "h6": -0.17,
+      "h24": 1.55
+    },
+    "liquidity": {
+      "usd": 65384.29,
+      "base": 292396183,
+      "quote": 42.3945
+    },
+    "fdv": 111806,
+    "marketCap": 111806,
+    "pairCreatedAt": 1759856711000,
+    "info": {
+      "imageUrl": "https://cdn.dexscreener.com/cms/images/207594269024794d1d015da53f579070e5a481cb8526bebd64cea52c7699e72d?width=800&height=800&quality=95&format=auto",
+      "header": "https://cdn.dexscreener.com/cms/images/8a5bd7d51d9b4e747a14e84f9d1797980cf499dcef2f1a301413e2e12765f1ad?width=1500&height=500&quality=95&format=auto",
+      "openGraph": "https://cdn.dexscreener.com/token-images/og/bsc/0x6331bf8d601f0d7f0d2101772af5137c418c4444?timestamp=1790495100000",
+      "websites": [
+        {
+          "url": "https://binancesupercycle.com/",
+          "label": "Website"
+        }
+      ],
+      "socials": [
+        {
+          "url": "https://x.com/BinanceSuperCy/",
+          "type": "twitter"
+        },
+        {
+          "url": "https://t.me/BinanceSuperCycleEntry",
+          "type": "telegram"
+        }
+      ]
+    }
+  },
+  {
+    "chainId": "bsc",
+    "dexId": "pancakeswap",
+    "url": "https://dexscreener.com/bsc/0xb60ebbe4de3d66723b70eb4e6f4ed9e72a0ab01f",
+    "pairAddress": "0xB60eBbE4dE3D66723B70eB4e6F4eD9e72a0ab01F",
+    "labels": [
+      "v3"
+    ],
+    "baseToken": {
+      "address": "0x6331BF8D601f0D7F0d2101772af5137c418c4444",
+      "name": "Binance Super Cycle",
+      "symbol": "BSC"
+    },
+    "quoteToken": {
+      "address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+      "name": "Wrapped BNB",
+      "symbol": "WBNB"
+    },
+    "priceNative": "0.0000001428",
+    "priceUsd": "0.0001101",
+    "txns": {
+      "m5": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h1": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h6": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h24": {
+        "buys": 3,
+        "sells": 3
+      }
+    },
+    "volume": {
+      "h24": 23.31,
+      "h6": 0,
+      "h1": 0,
+      "m5": 0
+    },
+    "priceChange": {
+      "h24": -1.21
+    },
+    "liquidity": {
+      "usd": 520.23,
+      "base": 2863814,
+      "quote": 0.2656
+    },
+    "fdv": 110142,
+    "marketCap": 110142,
+    "pairCreatedAt": 1759863562000,
+    "info": {
+      "imageUrl": "https://cdn.dexscreener.com/cms/images/207594269024794d1d015da53f579070e5a481cb8526bebd64cea52c7699e72d?width=800&height=800&quality=95&format=auto",
+      "header": "https://cdn.dexscreener.com/cms/images/8a5bd7d51d9b4e747a14e84f9d1797980cf499dcef2f1a301413e2e12765f1ad?width=1500&height=500&quality=95&format=auto",
+      "openGraph": "https://cdn.dexscreener.com/token-images/og/bsc/0x6331bf8d601f0d7f0d2101772af5137c418c4444?timestamp=1790495100000",
+      "websites": [
+        {
+          "url": "https://binancesupercycle.com/",
+          "label": "Website"
+        }
+      ],
+      "socials": [
+        {
+          "url": "https://x.com/BinanceSuperCy/",
+          "type": "twitter"
+        },
+        {
+          "url": "https://t.me/BinanceSuperCycleEntry",
+          "type": "telegram"
+        }
+      ]
+    }
+  },
+  {
+    "chainId": "bsc",
+    "dexId": "0xF2Fb1b5Be475E7E1b3C31082C958e781f73a1712",
+    "url": "https://dexscreener.com/bsc/0x1cfcb5bb0b090f471316dd71bcbaef893ed02dea",
+    "pairAddress": "0x1cFcB5Bb0B090f471316dD71bCBaeF893ed02dEA",
+    "baseToken": {
+      "address": "0x54D3bC5329560551686c2108599E186f36f5c393",
+      "name": "Arbibot",
+      "symbol": "ARBI"
+    },
+    "quoteToken": {
+      "address": "0x6331BF8D601f0D7F0d2101772af5137c418c4444",
+      "name": "Binance Super Cycle",
+      "symbol": "BSC"
+    },
+    "priceNative": "252925.1441",
+    "priceUsd": "27.17",
+    "txns": {
+      "m5": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h1": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h6": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h24": {
+        "buys": 1,
+        "sells": 0
+      }
+    },
+    "volume": {
+      "h24": 0,
+      "h6": 0,
+      "h1": 0,
+      "m5": 0
+    },
+    "priceChange": {},
+    "liquidity": {
+      "usd": 1.39,
+      "base": 0.02568,
+      "quote": 6495.7296
+    },
+    "fdv": 27177416,
+    "marketCap": 27177416,
+    "pairCreatedAt": 1759982654000
+  },
+  {
+    "chainId": "bsc",
+    "dexId": "pancakeswap",
+    "url": "https://dexscreener.com/bsc/0x4e00b1536c039e21db924ecde085c9a463e4325e",
+    "pairAddress": "0x4e00B1536C039e21dB924eCde085c9a463E4325E",
+    "labels": [
+      "v2"
+    ],
+    "baseToken": {
+      "address": "0x93ecd8e9156E6b217514BCFE59837b3807D8F53D",
+      "name": "Kabosu",
+      "symbol": "KABOSU"
+    },
+    "quoteToken": {
+      "address": "0x6331BF8D601f0D7F0d2101772af5137c418c4444",
+      "name": "Binance Super Cycle",
+      "symbol": "BSC"
+    },
+    "priceNative": "0.0001844",
+    "priceUsd": "0.00000002031",
+    "txns": {
+      "m5": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h1": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h6": {
+        "buys": 0,
+        "sells": 0
+      },
+      "h24": {
+        "buys": 1,
+        "sells": 1
+      }
+    },
+    "volume": {
+      "h24": 0.05,
+      "h6": 0,
+      "h1": 0,
+      "m5": 0
+    },
+    "priceChange": {
+      "h24": -7.66
+    },
+    "liquidity": {
+      "usd": 1.11,
+      "base": 27566782,
+      "quote": 5085.5653
+    },
+    "fdv": 140,
+    "marketCap": 140,
+    "pairCreatedAt": 1759892251000
+  }
+]

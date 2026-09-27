@@ -1,0 +1,12 @@
+{
+  "url": "bonkcoin.com",
+  "archived_snapshots": {
+    "closest": {
+      "status": "200",
+      "available": true,
+      "url": "http://web.archive.org/web/20180805223959/http://bonkcoin.com/",
+      "timestamp": "20180805223959"
+    }
+  },
+  "timestamp": "19960101"
+}

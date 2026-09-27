@@ -1,0 +1,332 @@
+{
+  "code": 1,
+  "message": "OK",
+  "result": {
+    "0x6331bf8d601f0d7f0d2101772af5137c418c4444": {
+      "anti_whale_modifiable": "0",
+      "buy_tax": "0",
+      "can_take_back_ownership": "0",
+      "cannot_buy": "0",
+      "cannot_sell_all": "0",
+      "creator_address": "0x48eb4042667b193894030372b69a69653ce605d7",
+      "creator_balance": "0",
+      "creator_percent": "0.000000",
+      "dex": [
+        {
+          "liquidity_type": "UniV2",
+          "name": "PancakeV2",
+          "liquidity": "32785.83797869",
+          "pool_fee": "0.0025",
+          "pair": "0xff0a8df8c4a0332e28a4c94ebb3f633944b08a94"
+        },
+        {
+          "liquidity_type": "UniV3",
+          "name": "PancakeV3",
+          "liquidity": "11.995723325017074494160000000000",
+          "pool_fee": "0.01",
+          "pair": "0xb60ebbe4de3d66723b70eb4e6f4ed9e72a0ab01f"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "UniswapV4",
+          "liquidity": "4.759175294379618134288832000000",
+          "pool_manager": "0x28e2ea090877bf75740558f6bfb36a5ffee9e9df",
+          "pool_fee": "0.85001",
+          "pair": "0xb6f64f8bbbe61128f6f2067d55babe1c60a879ff11e4fa7d54601f9b161f2600"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "Pancake Infinity CL",
+          "liquidity": "3.811272159148153291645488",
+          "pool_manager": "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b",
+          "pool_fee": "0.748995",
+          "pair": "0xe473584c96a924cd80e3f8f93cca08d2c6a3d7716a0ddbd910e44f626c8746b1"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "UniswapV4",
+          "liquidity": "2.876262242619934311580440000000",
+          "pool_manager": "0x28e2ea090877bf75740558f6bfb36a5ffee9e9df",
+          "pool_fee": "0.8",
+          "pair": "0x33858531d4b99bc9be5135e8094f47a2b4ef5ac7089ca2c897651722520dbc95"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "Pancake Infinity CL",
+          "liquidity": "0.298259540292246654392264",
+          "pool_manager": "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b",
+          "pool_fee": "0.984437",
+          "pair": "0xa274699e34593b49a8217b150dbfbe7875aa6b08acdbc84992740e1abcb3596d"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "UniswapV4",
+          "liquidity": "0.180195876311680117520000000000",
+          "pool_manager": "0x28e2ea090877bf75740558f6bfb36a5ffee9e9df",
+          "pool_fee": "0.95",
+          "pair": "0x9c7795bad1c2c01a77e29989d2f107fa4f3266144549477e510ddd7b9b50f308"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "Pancake Infinity CL",
+          "liquidity": "0.166519513214711928070995",
+          "pool_manager": "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b",
+          "pool_fee": "0.497991",
+          "pair": "0xe3223916ff825c9353f83f4f3e0fb45d8a347b5b1e2fda56cab2c7d050917258"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "Pancake Infinity CL",
+          "liquidity": "0.149595850257645635168779",
+          "pool_manager": "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b",
+          "pool_fee": "0.98551",
+          "pair": "0x49eb8b38e0e9fe05b796ec442ffabd9127b9729ae7f5f60f3bfaf415411856cd"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "Pancake Infinity CL",
+          "liquidity": "0.084697642396098725133674",
+          "pool_manager": "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b",
+          "pool_fee": "0.949799",
+          "pair": "0xc37add2283846154c63d69e68489e72a9b76f2f0139e7eac584be3a3d3a93614"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "Pancake Infinity CL",
+          "liquidity": "0.035120338945247472382729",
+          "pool_manager": "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b",
+          "pool_fee": "0.994377",
+          "pair": "0xd0436f8e669edcea39b7e66d75d01744edcdccc3734e5362c00f9d1e2c43e311"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "Pancake Infinity CL",
+          "liquidity": "0.020619334404067140295188",
+          "pool_manager": "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b",
+          "pool_fee": "0.969879",
+          "pair": "0x99e6c09c19f1b56bbe0c9277a42ade56d190b1fca1b9ac0b4dc3a022bb00435d"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "UniswapV4",
+          "liquidity": "0.015873957589617220004575000000",
+          "pool_manager": "0x28e2ea090877bf75740558f6bfb36a5ffee9e9df",
+          "pool_fee": "0.68",
+          "pair": "0xce256558561eb1bd325512fe6ce1bc5cc754496ee93837ef994d1c7d03175cdb"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "Pancake Infinity CL",
+          "liquidity": "0.012061504351973449980227",
+          "pool_manager": "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b",
+          "pool_fee": "0.984483",
+          "pair": "0xeaa4fb6965ba16f5d4b174a4714977b25f29492c93871eae16e058d4c046ef4d"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "Pancake Infinity CL",
+          "liquidity": "0.005529647941276325214505",
+          "pool_manager": "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b",
+          "pool_fee": "0.988052",
+          "pair": "0x77fc70d28d7ccb6393f7e7fe75f813c6492efc13475172af0301fa42ef842456"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "Pancake Infinity CL",
+          "liquidity": "0.004744693674076063483633",
+          "pool_manager": "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b",
+          "pool_fee": "0.968419",
+          "pair": "0x8fe4345f2e75a843cda2c67eda2b7ad571c4e03d1216bbbc73a99d245602554c"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "Pancake Infinity CL",
+          "liquidity": "0.002511824268863315002937",
+          "pool_manager": "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b",
+          "pool_fee": "0.929718",
+          "pair": "0x80c79dfb5857f2c9f461de438e9cc796b8956934bcec371b995f8469b6d2feef"
+        },
+        {
+          "liquidity_type": "UniV4",
+          "name": "Pancake Infinity CL",
+          "liquidity": "0.000507357291680358927954",
+          "pool_manager": "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b",
+          "pool_fee": "0.808132",
+          "pair": "0x69e2954b5fe01624bbe93428ca32c74b3f4247cbf7189a4581e9b7e4816fbf87"
+        }
+      ],
+      "external_call": "0",
+      "hidden_owner": "0",
+      "holder_count": "14983",
+      "holders": [
+        {
+          "address": "0xff0a8df8c4a0332e28a4c94ebb3f633944b08a94",
+          "tag": "PancakeV2",
+          "is_contract": 1,
+          "balance": "292396183.192143465948584742",
+          "percent": "0.292396183192143465",
+          "is_locked": 0
+        },
+        {
+          "address": "0x2df5a838e177242adf16a3cbc41012b8be2f0793",
+          "tag": "",
+          "is_contract": 0,
+          "balance": "41673884.984454685170335858",
+          "percent": "0.041673884984454685",
+          "is_locked": 0
+        },
+        {
+          "address": "0x3563e53a3a6757f51901e4db7ab76796ad5ee7fc",
+          "tag": "",
+          "is_contract": 1,
+          "balance": "34972325.426845759838341239",
+          "percent": "0.034972325426845759",
+          "is_locked": 0
+        },
+        {
+          "address": "0x4982085c9e2f89f2ecb8131eca71afad896e89cb",
+          "tag": "",
+          "is_contract": 0,
+          "balance": "17620596.770424918965870583",
+          "percent": "0.017620596770424918",
+          "is_locked": 0
+        },
+        {
+          "address": "0x69e047dfdde66ade9b13ec7e26d1a9641a7c6262",
+          "tag": "",
+          "is_contract": 1,
+          "balance": "14587654.910087724214095863",
+          "percent": "0.014587654910087724",
+          "is_locked": 0
+        },
+        {
+          "address": "0x587b83d62e0fb65ac9b4b97e5aad1d657e6e877c",
+          "tag": "",
+          "is_contract": 1,
+          "balance": "14562050.294398360811750545",
+          "percent": "0.014562050294398360",
+          "is_locked": 0
+        },
+        {
+          "address": "0x6edd7799d1e1958917efd590438061d5e278d966",
+          "tag": "",
+          "is_contract": 0,
+          "balance": "14355055.380650415899894256",
+          "percent": "0.014355055380650415",
+          "is_locked": 0
+        },
+        {
+          "address": "0x58587fb18d0f28ce84c2b3aaa750e41b0fd487fe",
+          "tag": "",
+          "is_contract": 0,
+          "balance": "14094878.920877913579288483",
+          "percent": "0.014094878920877913",
+          "is_locked": 0
+        },
+        {
+          "address": "0x9954f1d17d6e43b7981f4e8d4cabc577b1fedc9f",
+          "tag": "",
+          "is_contract": 0,
+          "balance": "13331239.644404622196378136",
+          "percent": "0.013331239644404622",
+          "is_locked": 0
+        },
+        {
+          "address": "0xcfc52eda4ef1234bb647e062aa79c35687c61378",
+          "tag": "",
+          "is_contract": 0,
+          "balance": "12751811.395150869067980976",
+          "percent": "0.012751811395150869",
+          "is_locked": 0
+        }
+      ],
+      "honeypot_with_same_creator": "0",
+      "is_anti_whale": "0",
+      "is_blacklisted": "0",
+      "is_honeypot": "0",
+      "is_in_dex": "1",
+      "is_mintable": "0",
+      "is_open_source": "1",
+      "is_proxy": "0",
+      "is_whitelisted": "0",
+      "lp_holder_count": "6",
+      "lp_holders": [
+        {
+          "address": "0x000000000000000000000000000000000000dead",
+          "tag": "",
+          "value": "32761.457574844673747778",
+          "is_contract": 0,
+          "balance": "59396.96961656815029505",
+          "percent": "0.999256373930024801",
+          "NFT_list": null,
+          "is_locked": 1
+        },
+        {
+          "address": "0x5ee02abe98295af10d6f3a93d1933456940ccec3",
+          "tag": "",
+          "value": "114.917297673183427329",
+          "is_contract": 0,
+          "balance": "208.34662873953511907",
+          "percent": "0.003505089537374985",
+          "NFT_list": null,
+          "is_locked": 0
+        },
+        {
+          "address": "0x032888f7cee5895230ce336c0784480adb07f57a",
+          "tag": "",
+          "value": "23.594264588018555453",
+          "is_contract": 1,
+          "balance": "42.776723644184574484",
+          "percent": "0.000719648056680847",
+          "NFT_list": null,
+          "is_locked": 0
+        },
+        {
+          "address": "0xde35d6856792c375bae3d08f90c5bf4004aacd55",
+          "tag": "",
+          "value": "0.786139258919479611",
+          "is_contract": 0,
+          "balance": "1.425281203370058431",
+          "percent": "0.000023978013294350",
+          "NFT_list": null,
+          "is_locked": 0
+        },
+        {
+          "address": "0x1d53acb2ded8f09f6443b5ac0f7f45c2a8b6ebad",
+          "tag": "",
+          "value": "0.771316256131583196",
+          "is_contract": 1,
+          "balance": "1.398406897054242363",
+          "percent": "0.000023525897267987",
+          "NFT_list": null,
+          "is_locked": 0
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000000",
+          "tag": "Null Address",
+          "value": "0.000000000000000552",
+          "is_contract": 0,
+          "balance": "0.000000000000001",
+          "percent": "0.000000000000000000",
+          "NFT_list": null,
+          "is_locked": 1
+        }
+      ],
+      "lp_total_supply": "59441.171621415704928965",
+      "owner_address": "0x0000000000000000000000000000000000000000",
+      "owner_balance": "0",
+      "owner_change_balance": "0",
+      "owner_percent": "0.0",
+      "personal_slippage_modifiable": "0",
+      "selfdestruct": "0",
+      "sell_tax": "0",
+      "slippage_modifiable": "0",
+      "token_name": "Binance Super Cycle",
+      "token_symbol": "BSC",
+      "total_supply": "1000000000",
+      "trading_cooldown": "0",
+      "transfer_pausable": "1",
+      "transfer_tax": ""
+    }
+  }
+}

@@ -14,7 +14,7 @@ inspection, builds, and a mocked browser check of the new routes.
 
 | Area | Current `frontend-next/` status |
 | --- | --- |
-| Routing | `app/page.tsx` redirects `/` to `/login`; `/login`, `/dashboard`, `/users`, `/users/add`, `/users/edit/[id]`, `/roles`, `/roles/add`, `/roles/edit/[id]`, `/profile`, `/menus`, `/chat`, and `/change-password` exist. Any other module path is served by `app/(admin)/[modulePath]/[[...rest]]/page.tsx` (index, `add`, `edit/<id>`; other sub-paths show the not-found page), replacing legacy `ModuleRoute.jsx`. `components/system/DocumentTitle.tsx` sets the tab title to `<app name> | <last segment>` |
+| Routing | `app/page.tsx` redirects `/` to `/login`; `/login`, `/dashboard`, `/users`, `/users/add`, `/users/edit/[id]`, `/roles`, `/roles/add`, `/roles/edit/[id]`, `/profile`, `/menus`, `/chat`, `/change-password`, and the [memecoin analyzer](memecoin.md#pages) routes (not legacy routes: `/memecoin`, `/memecoin/[chain]/[address]`, `/memecoin/history`, `/memecoin/history/[id]`, `/memecoin/wallets`, `/memecoin/journal`, `/memecoin/watch`) exist. Any other module path is served by `app/(admin)/[modulePath]/[[...rest]]/page.tsx` (index, `add`, `edit/<id>`; other sub-paths show the not-found page), replacing legacy `ModuleRoute.jsx`. `components/system/DocumentTitle.tsx` sets the tab title to `<app name> | <last segment>` |
 | Login | Responsive login page, validation, password visibility, clock, styled toasts, and navigation to `/dashboard` |
 | Authentication | `context/authContext.tsx` stores the token in localStorage, restores identity through `/me`, and exposes refresh/logout |
 | Dashboard | Original role, content-access, and user-count cards inside the shared admin layout |

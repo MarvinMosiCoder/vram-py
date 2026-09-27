@@ -19,6 +19,10 @@ from app.models.admin import (
     AdminPasswordHistory,
     ChatConversations,
     MenusRoles,
+    MemecoinReport,
+    MemecoinWallet,
+    MemecoinTrade,
+    MemecoinAlert,
 )
 
 __all__ = [
@@ -34,4 +38,8 @@ __all__ = [
     "AdminPasswordHistory",
     "ChatConversations",
     "MenusRoles",
+    "MemecoinReport",
+    "MemecoinWallet",
+    "MemecoinTrade",
+    "MemecoinAlert",
 ]

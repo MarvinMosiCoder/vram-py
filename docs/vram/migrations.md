@@ -134,6 +134,11 @@ the metadata and [API](api.md#response-conventions) for the status meanings.
 
 ## Troubleshooting
 
+Known drift: the database has a unique constraint `uq_adm_menus_roles_menu_role`
+on `adm_menus_roles` that the model does not declare, so autogenerate proposes
+dropping it in every revision and `alembic check` reports it. Remove that
+operation from generated revisions until the model declares the constraint.
+
 An empty generated migration means no detected difference. Check the selected
 database, model imports, and actual schema before deciding whether a revision is
 needed. Do not drop existing tables just to make autogeneration produce output.

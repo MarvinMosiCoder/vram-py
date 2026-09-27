@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import httpx
 
 from app import schemas
+from app.helpers.memecoin.chains import normalize
 from app.helpers.memecoin.common import dig
 
 SEARCH_URL = "https://api.dexscreener.com/latest/dex/search"
@@ -43,7 +44,21 @@ def summarize_pair(pair: dict) -> schemas.PoolData:
         sells_24h=dig(pair, "txns", "h24", "sells"),
         age_hours=age_hours(pair.get("pairCreatedAt")),
         url=pair.get("url"),
+        websites=[site["url"] for site in dig(pair, "info", "websites") or [] if site.get("url")],
+        socials=[
+            schemas.Social(type=social.get("type"), url=social["url"])
+            for social in dig(pair, "info", "socials") or []
+            if social.get("url")
+        ],
     )
+
+
+def merged_links(token: schemas.MarketData, pool: schemas.PoolData) -> tuple[list[str], list[schemas.Social]]:
+    """Every website and social across a token's pools, first seen first. Pools
+    of one token usually repeat the same links, but not every pool lists them."""
+    websites = list(dict.fromkeys([*token.websites, *pool.websites]))
+    socials = list({social.url: social for social in [*token.socials, *pool.socials]}.values())
+    return websites, socials
 
 def group_tokens(pairs: list[dict]) -> list[schemas.MarketData]:
     """One entry per token: its deepest pool, plus totals across all its pools."""
@@ -67,13 +82,19 @@ def group_tokens(pairs: list[dict]) -> list[schemas.MarketData]:
         token.pools += 1
         token.total_liquidity_usd += liquidity
         token.total_volume_24h += volume
+        websites, socials = merged_links(token, pool)
         if liquidity > (token.liquidity_usd or 0):
-            tokens[key] = token.model_copy(update=pool.model_dump())
+            # dict(pool), not model_dump(): keeps the Social models intact.
+            token = token.model_copy(update=dict(pool))
+            tokens[key] = token
+        token.websites, token.socials = websites, socials
 
     # Most traded first. Liquidity is easy to fake: a pool can claim millions
     # and see a few cents of trading a day.
     return sorted(tokens.values(), key=lambda t: t.total_volume_24h, reverse=True)
 
 def token_market(pairs: list[dict], address: str) -> schemas.MarketData | None:
-    """The MarketData for ``address``, skipping pairs where it is only the quote token."""
-    return next((t for t in group_tokens(pairs) if t.address == address), None)
+    """The MarketData for ``address``, skipping pairs where it is only the quote
+    token. EVM addresses match in any letter case."""
+    wanted = normalize(address)
+    return next((t for t in group_tokens(pairs) if normalize(t.address) == wanted), None)

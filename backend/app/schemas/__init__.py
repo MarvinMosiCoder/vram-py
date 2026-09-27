@@ -21,7 +21,9 @@ from app.schemas.admin import (
     ChatConversationsOut,
     ConversationSettings,
     AdmPasswordHistoryIn,
-    PoolData,MarketData,Holder,Risk,SafetyData,Finding,Assessment,CoinReport
+    PoolData,MarketData,Holder,Risk,SafetyData,Finding,Assessment,CoinReport,
+    ReportSummary, SavedReport, WalletIn, WalletOut, TradeIn, TradeUpdate, TradeOut,
+    Social, CreatorToken, InsiderNetwork, WebData, AlertOut, AlertList, WatchStatus, WatchResult,
 )
 
 __all__ = [
@@ -40,5 +42,7 @@ __all__ = [
     "ChatConversationsOut",
     "ConversationSettings",
     "AdmPasswordHistoryIn",
-    "PoolData", "MarketData", "Holder", "Risk", "SafetyData", "Finding", "Assessment","CoinReport"
+    "PoolData", "MarketData", "Holder", "Risk", "SafetyData", "Finding", "Assessment","CoinReport",
+    "ReportSummary", "SavedReport", "WalletIn", "WalletOut", "TradeIn", "TradeUpdate", "TradeOut",
+    "Social", "CreatorToken", "InsiderNetwork", "WebData", "AlertOut", "AlertList", "WatchStatus", "WatchResult",
 ]

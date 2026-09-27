@@ -113,6 +113,7 @@ response fields, are documented in the [AI chat](ai-chat.md) guide.
 
 ## Memecoin analyzer
 
-`GET /memecoin/search` and `GET /memecoin/analyze/{chain}/{address}`, with their
-parameters, status codes, and the `CoinReport` response, are documented in the
-[memecoin analyzer](memecoin.md#api) guide.
+The `/memecoin/...` endpoints (search, analyze, saved reports, wallet lists,
+the trade journal, and wallet watching with alerts), with their parameters,
+status codes, and responses,
+are documented in the [memecoin analyzer](memecoin.md#api) guide.

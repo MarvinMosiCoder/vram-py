@@ -54,6 +54,12 @@ canned stub that reaches no provider and needs no key - a development setting
 for working on the chat stack without spending the free tier's 20 daily
 requests, never for judging a reply. See [stub mode](ai-chat.md#stub-mode).
 
+`TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are optional. With both set, each
+new [memecoin watch alert](memecoin.md#watch-page) is also sent to that Telegram
+chat; without them, alerts stay on the Watch page. Create a bot with Telegram's
+@BotFather for the token; the chat id is your own chat with the bot or a group
+it is in.
+
 `REDIS_URL` is optional and only needed before running more than one worker; see
 [AI chat](ai-chat.md#shared-state-redis). Windows has no native Redis server -
 use Docker, WSL, or a hosted instance. Left unset, the chat rate limiter and

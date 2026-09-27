@@ -15,6 +15,7 @@ keeps the legacy React/Vite implementation as a porting reference. See
 | [API reference](api.md) | Endpoints, request parameters, response conventions |
 | [AI chat](ai-chat.md) | Chat endpoint, memory, cost controls, composer |
 | [Memecoin analyzer](memecoin.md) | Solana coin checker: status, collectors, rule engine, command line, API, tests |
+| [Memecoin code walkthrough](memecoin-walkthrough.md) | How the analyzer's code fits together, with annotated excerpts, design reasons, and how to extend it |
 | [Profile and navbar](profile-navbar.md) | Image workflows and live navbar updates |
 | [Frontend](frontend.md) | Next.js migration status, shared controls, themes, responsive design |
 | [Notifications](notifications.md) | Toastify usage and per-component styling |

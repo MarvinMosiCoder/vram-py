@@ -234,11 +234,11 @@ them, and CORS already allows `http://localhost:3000`.
 - [x] `GET /memecoin/search?q=<name>` returns the matching coins.
 - [x] `GET /memecoin/analyze/{chain}/{address}` returns the full report as JSON.
 - [x] Use Pydantic response models so `/docs` documents the API.
-- [ ] Route tests in `backend/tests/test_memecoin_routes.py` (next: router alone in
-      a `TestClient`, login and network replaced).
-- [ ] Try both endpoints from `/docs` after Authorize.
-- [ ] Cache reports in memory for a few minutes to save API calls, and handle
-      RugCheck's HTTP 429.
+- [x] Route tests in `backend/tests/test_memecoin_routes.py`: router alone in a
+      `TestClient`, login and network replaced.
+- [x] Try both endpoints from `/docs` after Authorize.
+- [x] Cache reports in memory for a few minutes to save API calls, and handle
+      RugCheck's HTTP 429 (one retry after `Retry-After`, capped).
 
 Done when: both endpoints work from `http://localhost:8080/docs` after Authorize.
 Learn: routes, path/query parameters, response models, CORS.
@@ -248,17 +248,23 @@ Learn: routes, path/query parameters, response models, CORS.
 Pages go under `frontend-next/app/(admin)/memecoin/`, inside the admin shell,
 and call the API through `lib/http.ts`. Add the sidebar link on `/menus`.
 
-- [ ] Search page at `/memecoin`: a search box that calls `/memecoin/search` and lists the matches.
-- [ ] Report page at `/memecoin/[chain]/[address]`: score, verdict badge, red flags,
+- [x] Search page at `/memecoin`: a search box that calls `/memecoin/search` and lists the matches.
+- [x] Report page at `/memecoin/[chain]/[address]`: score, verdict badge, red flags,
       and links to DexScreener, RugCheck, and Solscan.
-- [ ] Loading and error states.
-- [ ] TypeScript types matching the backend's report JSON.
-- [ ] Mobile-friendly layout.
+- [x] Loading and error states.
+- [x] TypeScript types matching the backend's report JSON (`frontend-next/types/memecoin.ts`).
+- [x] Mobile-friendly layout.
+- [ ] Try search and report in the browser with a real login.
 
 Done when: you can search a coin in the browser and open its report.
 Learn: App Router, dynamic routes, client components, `fetch`, `useState`/`useEffect`, TypeScript types.
 
 ### Phase 5: Gemini AI report
+
+Postponed on 2026-09-27. The rules already judge everything DexScreener and
+RugCheck provide, so an AI report would mostly restate them. Revisit after
+Phase 8, when websites and socials give the AI fuzzy evidence to weigh. The rule
+verdict stays final either way; an AI opinion may only add concerns.
 
 - [ ] Call Gemini from Python (the same SDK as vram's `backend/app/api/admin/chat.py`).
 - [ ] Prompt: this file's checklist plus the collected evidence as JSON; ask for
@@ -274,31 +280,59 @@ Learn: calling an LLM API, prompt design, structured output, rate limits.
 
 ### Phase 6: Database and history
 
-- [ ] Postgres with SQLAlchemy (as in vram): `reports`, `blacklist_wallets`
-      (scam devs, bundle wallets), `good_devs`.
-- [ ] Save every report and add a history page in Next.js.
-- [ ] Rule: a deployer on the blacklist is a hard FAIL.
-- [ ] Trade journal: entry/exit price and reason per coin (see section 7).
+Implemented state is in [docs/vram/memecoin.md](docs/vram/memecoin.md#storage).
+
+- [x] Postgres with SQLAlchemy (as in vram): `memecoin_reports`, and one
+      `memecoin_wallets` table whose `list` column is `blacklist` (scam devs,
+      bundle wallets) or `good_dev`, instead of two tables.
+- [x] Save every report and add a history page in Next.js.
+- [x] Rule: a deployer on the blacklist is a hard FAIL (`creator_blacklisted`).
+      Added `holder_blacklisted`, a warning for a blacklisted top-10 holder.
+- [x] Trade journal: entry/exit price and reason per coin (see section 7), with
+      profit or loss, at `/memecoin/journal`.
+- [ ] Try history, wallets, and journal in the browser with a real login.
 
 Done when: past reports and journal entries survive a restart.
 Learn: SQLAlchemy models, migrations, CRUD endpoints, list/detail pages.
 
 ### Phase 7: Dev history and bundle detection
 
-- [ ] Find the deployer wallet and list its previous tokens (Helius).
-- [ ] Mark previous tokens that rugged or died.
-- [ ] Check first buyers: same buy amounts or the same funding wallet means a bundle warning.
+Built on 2026-09-27 from RugCheck data, so no Helius key was needed; see
+[docs/vram/memecoin.md](docs/vram/memecoin.md#rule-engine).
+
+- [x] Find the deployer wallet and list its previous tokens: RugCheck's
+      `creator` and `creatorTokens`.
+- [x] Mark previous tokens that died: a market cap under $10,000
+      (`creator_dead_tokens`, `creator_many_launches`). Confirming a rug would
+      need each token's own report.
+- [ ] Check first buyers: same buy amounts or the same funding wallet means a
+      bundle warning. Not built; RugCheck's transfer-linked wallets
+      (`linked_wallets_hold`) are the nearest signal. Needs transaction data.
 
 Learn: working with on-chain transaction data, pagination, heuristics.
 
 ### Phase 8: Website and social checks
 
-- [ ] Domain age via a WHOIS API.
-- [ ] First Wayback Machine snapshot date.
-- [ ] X account checks last, because X's API is the expensive part.
+- [x] Domain age via RDAP, WHOIS's free successor (`new_domain`), plus the
+      website and socials DexScreener lists (`no_socials`).
+- [x] First Wayback Machine snapshot date, shown for information only:
+      archive.org rate-limits too hard for a rule.
+- [ ] X account checks: not built, X's API is paid.
+
+### Multi-chain
+
+Added on 2026-09-27 beside Phase 9; see [docs/vram/memecoin.md](docs/vram/memecoin.md#chains).
+
+- [x] Ethereum, BNB Smart Chain ("bt"), Base, Polygon, Arbitrum, and Robinhood
+      Chain beside Solana, with GoPlus for EVM contract safety (honeypot, taxes,
+      verified source, owner powers, holders, LP locks).
+- [ ] Watch EVM wallets (needs an EVM RPC per chain and log parsing).
 
 ### Phase 9: Tracking and alerts (finding good coins)
 
-- [ ] Watchlist of good-trader, influencer, and dev wallets.
-- [ ] Get notified when a watched wallet buys (Helius webhooks or polling).
-- [ ] Send alerts to Telegram or the browser.
+- [x] Watchlist of good-trader, influencer, and dev wallets: the `watch` and
+      `good_dev` lists.
+- [x] Get notified when a watched wallet buys: polling the public Solana RPC,
+      on the Watch page's button or `python -m app.helpers.memecoin.watch --every 300`.
+- [x] Send alerts to Telegram (optional, with a bot token) or the browser (while
+      a memecoin page is open).

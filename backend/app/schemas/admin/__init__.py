@@ -12,7 +12,11 @@ from app.schemas.admin.adm_notifications import AdmNotificationsOut
 from app.schemas.admin.adm_announcements import AdmAnnouncementsOut
 from app.schemas.admin.adm_password_history import AdmPasswordHistoryOut, AdmPasswordHistoryIn
 from app.schemas.admin.chat import ChatRequest, ChatMessage, ChatConversationsOut, ConversationSettings
-from app.schemas.admin.memecoin import PoolData, MarketData, Holder, Risk, SafetyData, Finding, Assessment, CoinReport
+from app.schemas.admin.memecoin import (
+    PoolData, MarketData, Holder, Risk, SafetyData, Finding, Assessment, CoinReport,
+    ReportSummary, SavedReport, WalletIn, WalletOut, TradeIn, TradeUpdate, TradeOut,
+    Social, CreatorToken, InsiderNetwork, WebData, AlertOut, AlertList, WatchStatus, WatchResult,
+)
 __all__ = [
     "UserCreate",
     "UserLogin",
@@ -31,5 +35,7 @@ __all__ = [
     "ChatConversationsOut",
     "ConversationSettings",
     "AdmPasswordHistoryIn",
-    "PoolData", "MarketData", "Holder", "Risk", "SafetyData", "Finding", "Assessment", "CoinReport"
+    "PoolData", "MarketData", "Holder", "Risk", "SafetyData", "Finding", "Assessment", "CoinReport",
+    "ReportSummary", "SavedReport", "WalletIn", "WalletOut", "TradeIn", "TradeUpdate", "TradeOut",
+    "Social", "CreatorToken", "InsiderNetwork", "WebData", "AlertOut", "AlertList", "WatchStatus", "WatchResult",
 ]

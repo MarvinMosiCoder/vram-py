@@ -2,6 +2,145 @@
 
 ## Unreleased
 
+- Added EVM chains to the [memecoin analyzer](memecoin.md#chains): Ethereum,
+  BNB Smart Chain (read from "bt"), Base, Polygon, Arbitrum, and Robinhood
+  Chain beside Solana. `chains.py` (mirrored by `frontend-next`'s `chains.ts`)
+  lists them; `goplus.py` gets EVM contract safety from GoPlus, free and without
+  a key, and retries its code-4029 rate limit. EVM addresses are stored in
+  lower case. Rules gained `families`, so RugCheck-only rules are skipped on EVM
+  instead of counting as unchecked, and eleven EVM rules were added (honeypot,
+  sell tax, unverified source, owner powers, creator honeypots). Search takes a
+  `chain` filter; analyze, wallets, trades, and the history filter accept EVM
+  addresses; trades store their chain (revision `8512ed42c0ac`, applied, with
+  the known drift removed). Watching stays Solana-only. The pages gained a
+  Chain select on search and the journal, chain labels, a GoPlus safety panel,
+  and chain-specific links (GoPlus, Etherscan, BscScan, BaseScan, PolygonScan,
+  Arbiscan, Robinhood Chain's Blockscout). `pytest` passes 168; six deliberate
+  breakages each failed a test after one weak test was strengthened; live
+  command-line checks of PEPE on Ethereum and ROBINHOOD on Robinhood Chain
+  worked; five mocked Playwright scripts pass.
+
+- Built Phases 7-9 of the [memecoin analyzer](memecoin.md) with free sources
+  and no new API keys. Phase 7: RugCheck's `creatorTokens` and `insiderNetworks`
+  feed `creator_dead_tokens` (fail), `creator_many_launches`, and
+  `linked_wallets_hold`. Phase 8: DexScreener's websites and socials, domain age
+  from RDAP (`new_domain`, `no_socials`), and the first Wayback snapshot as
+  information; X was not built because its API is paid. `analyzer.collect` now
+  returns a `Sources` object and looks the website up after DexScreener answers.
+  Phase 9: a `watch` wallet list; `solana_rpc.py` and `watch.py` find tokens a
+  watched wallet gained through the public Solana RPC, oldest first across
+  checks; `memecoin_alerts` stores them (revision `6bc95dcb68fa`, applied to the
+  development database, with the known `adm_menus_roles` drift removed again);
+  new endpoints for watch status, checks, and alerts; optional Telegram delivery;
+  a command line for scheduled checks. `describe` moved to `common.py`. In
+  `frontend-next/`, the report gained Creator history and Website and socials
+  panels and a Linked wallets line, the Wallets page a Watch list, and a Watch
+  tab with an unseen badge, Check now, alerts, and browser notifications.
+  `pytest` passes 123; seven deliberate breakages each failed a test after two
+  weak tests were strengthened. Live runs against the real services: Bonk and
+  STONKWHEEL through the command line, and a watch check against the public RPC
+  on Postgres in a rolled-back transaction that found a saved buy 22
+  transactions back. Those runs found and fixed a 429 from pacing RPC calls
+  0.2 seconds apart and a scan that skipped the oldest transactions of a
+  backlog. `npm run lint`, `npm run build`, and four mocked Playwright scripts
+  pass; a clipped tab at 390 px was fixed. Not yet tried with a real login.
+
+- Postponed Phase 5 (the Gemini AI report) of the [memecoin analyzer](memecoin.md)
+  and built Phase 6, [storage](memecoin.md#storage). New tables
+  `memecoin_reports`, `memecoin_wallets` (blacklist and good dev lists), and
+  `memecoin_trades`, created by revision `b33310bd5184` and applied to the
+  development database; the unrelated `adm_menus_roles` drift that autogenerate
+  proposed was removed and is now noted in [migrations](migrations.md#troubleshooting).
+  `storage.py` holds the queries; `analyze` saves each fresh report once and
+  judges it against the blacklist, with new rules `creator_blacklisted` (fail)
+  and `holder_blacklisted` (warn). New endpoints list and show saved reports,
+  manage wallet lists (409 on a duplicate; blacklist changes clear the report
+  cache), and manage your own trades (another user's trade is 404). Times are
+  stored as naive UTC and marked as UTC in responses. In `frontend-next/`, a
+  memecoin layout adds Search, History, Wallets, and Journal tabs, with pages
+  for each; the report display moved to `ReportView.tsx` so saved reports render
+  like live ones, and the report page gained "Log a trade" and "Add creator to
+  blacklist". Route tests now use an in-memory SQLite database instead of
+  reaching Postgres. `pytest` passes 72, six deliberate breakages each failed a
+  test, a rolled-back run against Postgres exercised every endpoint, and
+  `npm run lint`, `npm run build`, and three mocked Playwright scripts pass. Not
+  yet tried in the browser with a real login.
+
+- Finished Phase 4 of the [memecoin analyzer](memecoin.md#report-page): the
+  report page at `/memecoin/<chain>/<address>`
+  (`app/(admin)/memecoin/[chain]/[address]/page.tsx` and
+  `components/memecoin/MemecoinReport.tsx`), with loading, error and retry
+  states, the verdict badge and score, red flags with fails first, the
+  High-risk-from-missing-data explanation, market and safety facts, and links
+  to DexScreener, RugCheck, and Solscan. Invalid chains and addresses show the
+  404 page without an API request. `format.ts` gained `price`, `pct`, `count`,
+  and `yesNo`. `npm run lint` and `npm run build` pass, and a mocked Playwright
+  run passed 16 report checks at 1280 and 390 px, using reports built by the
+  backend from saved coins. The walkthrough now covers the pages. Not yet tried
+  with a real login.
+
+- Started Phase 4 of the [memecoin analyzer](memecoin.md#pages): the `/memecoin`
+  search page in `frontend-next/` (`app/(admin)/memecoin/page.tsx`,
+  `components/memecoin/MemecoinSearch.tsx` and `format.ts`) and TypeScript
+  response types in `types/memecoin.ts`, checked field by field and for
+  nullability against the Pydantic schemas. A browser check fixed four display
+  bugs: "1 pools", `$0` liquidity for a pool with no figure (now `?`), the
+  no-match text following the input instead of the searched query, and long
+  names squeezing the stats. `npm run lint` and `npm run build` pass; a mocked
+  Playwright run passed 16 checks at 1280 and 390 px. The report page is not
+  built yet, so result links lead to a 404.
+
+- Fixed a memecoin verdict that improved when DexScreener failed. Without market
+  data, `young_pair` and `low_volume` go unchecked, and counting them as passed
+  turned a coin with four warnings from `High risk` (40) into `Watch` (30). The
+  new `rules.worst_case_score` adds 10 for each unchecked warning, and
+  `verdict_for` uses it for the High-risk threshold; the reported `score` is
+  unchanged. `check` explains a High risk that comes from unchecked warnings.
+  The saved coins' verdicts are unchanged. Added two tests; `pytest` passes 43,
+  and both fail without the fix. See [rule engine](memecoin.md#rule-engine).
+
+- Added the [memecoin code walkthrough](memecoin-walkthrough.md) for developers:
+  the request flow, each layer with annotated excerpts copied from the source,
+  error handling, design reasons, tests, how to add a rule, source, or route,
+  and the Python concepts used. Behavior reference stays in
+  [memecoin.md](memecoin.md). Every excerpt line was checked against the source,
+  and the Bonk example and the missing-source verdicts were re-run on saved
+  data. No code changed.
+
+- Finished Phase 3 of the [memecoin analyzer](memecoin.md#report-cache).
+  `analyzer.analyze` reuses a complete report for 5 minutes from an in-process
+  cache; a report with a failed source is not cached. `rugcheck.fetch_report`
+  retries one HTTP 429 after the `Retry-After` delay, capped at 10 seconds, or 2
+  seconds without the header; a second 429 stays a RugCheck error in the report.
+  Added three cache tests to `test_memecoin_routes.py` and
+  `tests/test_rugcheck_retry.py`, which uses `httpx.MockTransport`; `pytest`
+  passes 41. Disabling the cache, caching failed reports, removing the retry, or
+  retrying every error each made a test fail. A live `check` of Bonk still
+  prints a full report. The retry was tested only against a fake server; no
+  live 429 was produced.
+
+- Added memecoin [route tests](memecoin.md#tests) in
+  `backend/tests/test_memecoin_routes.py`: nine tests that run the router alone
+  in a `TestClient`, with `get_current_user` overridden and the DexScreener and
+  collect functions replaced by saved Bonk data. They cover 200 responses, the
+  Solana-only search filter, 422 before any external call, a search failure as
+  502, a failed RugCheck inside a 200 report, and 401 without a login. `pytest`
+  passes 32. Removing the login dependency, the address pattern, the chain
+  restriction, or the Solana filter from the router each made a test fail. The
+  user then tried both routes from `/docs` with a real admin login.
+
+- Fixed memecoin rules that passed a coin when a RugCheck field was missing.
+  `lp_unlocked` (a fail rule) returned a pass instead of unchecked when
+  `lp_locked_pct` was `None`, as it is for `fluffs`, whose pools RugCheck had not
+  indexed, so a coin with no LP lock figure could still earn `Watch`. A missing
+  `topHolders` list became a 0% top-10 share and passed `top10_concentrated`.
+  The new `rules.on_safety_value` wrapper reports a missing field as unchecked;
+  seven RugCheck rules use it. `SafetyData.top10_pct` and `top10_insiders` are
+  now `None` when RugCheck lists no holders, and `check` prints `?` for unknown
+  holders, insiders, and mutable metadata. The saved coins' verdicts are
+  unchanged. Added four tests; `pytest` passes 23, and the four new ones fail
+  without the fix. See [rule engine](memecoin.md#rule-engine).
+
 - Started Phase 3 of the [memecoin analyzer](memecoin.md#api). Report building
   moved from `check.py` into `backend/app/helpers/memecoin/analyzer.py`, shared
   by the command line and the new router, with a `CoinReport` response schema.
