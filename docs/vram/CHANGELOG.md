@@ -2,6 +2,54 @@
 
 ## Unreleased
 
+- Added Remove to individual memecoin history rows, with inline confirmation
+  and the same administrator-only access as clearing all history. Only the
+  selected snapshot and its journal references are removed; journal entries
+  and other snapshots stay intact. No live reports were deleted during testing.
+  All 30 storage-route tests and frontend lint pass. Production build/type
+  checks remain blocked by missing existing chat dependencies; no browser
+  interaction check was performed.
+
+- Added administrator-only Clear all history to memecoin History, with explicit
+  confirmation of shared/global scope and an authenticated DELETE endpoint.
+  Report deletion and detaching journal links are transactional; trades, wallets,
+  and alerts remain. The page reloads after deletion and ignores obsolete list
+  responses. No existing application history was deleted during development.
+  All 187 backend tests and frontend lint pass, including authorization,
+  confirmation, journal preservation, repeat clears, and rollback tests.
+  Build/type checks still fail on the existing missing chat dependencies;
+  the browser interaction was not exercised.
+
+- Raised scalp defaults to $75K pool liquidity, $10K five-minute volume, and
+  100 five-minute trades. Added an editable 10% minimum pool-liquidity/market-cap
+  ratio with unknown handling and percentage display. Market-cap and hourly
+  volume minimums remain $100K and $50K. Reset defaults uses the new values.
+
+- Added full selectable creator/owner wallet addresses with copy feedback and
+  links to a new Wallet search page. Its authenticated, paginated lookup finds
+  tokens in saved reports and Solana's recorded RugCheck creator history,
+  deduplicates mints, and distinguishes creator from EVM owner relationships.
+  Results clearly state that coverage is observed history, not every on-chain
+  launch. See [wallet search](memecoin.md#wallet-copying-and-creator-search).
+  Verification: all 183 backend tests and frontend lint pass. Build/type checks
+  remain blocked by the existing missing chat dependencies `react-markdown` and
+  `remark-gfm`. Clipboard and browser layout were not verified in a browser.
+
+- Scalp filter Pass labels and the matching status now use green badges that
+  remain green across role themes, with text retained for accessibility.
+
+- Added a Quick scalp setup panel with editable market-cap, pool-liquidity,
+  recent-volume and transaction minimums, plus volume acceleration. DexScreener
+  collection now retains market cap, FDV, 1h/5m volume, 5m trades and price changes.
+  A separate authenticated market endpoint supports 30-second refreshes without
+  rerunning safety or saving reports. Risk verdicts, missing data and stale data
+  prevent a positive match; saved reports remain historical. See the
+  [scalp guide](memecoin.md#quick-scalp-setup) for defaults and limitations.
+  Verification: 172 backend tests, four frontend filter tests, and lint pass.
+  Production build/type checking is blocked by missing existing chat dependencies
+  (`react-markdown`, `remark-gfm`); package installation is unavailable in the
+  local offline cache. Browser interactions were not verified.
+
 - Added EVM chains to the [memecoin analyzer](memecoin.md#chains): Ethereum,
   BNB Smart Chain (read from "bt"), Base, Polygon, Arbitrum, and Robinhood
   Chain beside Solana. `chains.py` (mirrored by `frontend-next`'s `chains.ts`)

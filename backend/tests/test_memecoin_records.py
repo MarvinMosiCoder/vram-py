@@ -74,6 +74,116 @@ def test_a_missing_report_is_404(client):
     assert client.get("/memecoin/reports/999").status_code == 404
 
 
+def clear_history(client):
+    return client.request("DELETE", "/memecoin/reports", json={"confirm": "clear_all_reports"})
+
+
+def test_clear_history_preserves_journals_wallets_and_clears_cache(client, save, user):
+    first = save(BONK, minutes_ago=3)
+    second = save(EPUMP, minutes_ago=1)
+    first_id, second_id = first.id, second.id
+    open_trade(client, report_id=first_id)
+    user.id = 2
+    open_trade(client, report_id=second_id)
+    user.id = 1
+    client.post("/memecoin/wallets", json={"address": WALLET, "list": "watch"})
+    analyzer._cache[("solana", BONK_MINT)] = (0, None)
+
+    response = clear_history(client)
+    assert response.status_code == 200 and response.json() == {"deleted": 2}
+    assert client.get("/memecoin/reports").json() == []
+    assert client.get(f"/memecoin/reports/{first_id}").status_code == 404
+    assert analyzer._cache == {}
+    for user_id in (1, 2):
+        user.id = user_id
+        trades = client.get("/memecoin/trades").json()
+        assert len(trades) == 1 and trades[0]["report_id"] is None
+        assert trades[0]["entry_reason"] == "Watch verdict, volume rising"
+    assert len(client.get("/memecoin/wallets").json()) == 1
+    assert clear_history(client).json() == {"deleted": 0}
+
+
+def test_clear_history_requires_admin_and_explicit_confirmation(client, save, user):
+    save(BONK)
+    user.id_adm_role = 2
+    assert clear_history(client).status_code == 403
+    user.id_adm_role = 1
+    assert client.delete("/memecoin/reports").status_code == 422
+    assert client.request("DELETE", "/memecoin/reports", json={"confirm": "yes"}).status_code == 422
+    assert len(client.get("/memecoin/reports").json()) == 1
+
+
+def test_clear_history_requires_login(app, client, save):
+    from app.core.auth import get_current_user
+    save(BONK)
+    del app.dependency_overrides[get_current_user]
+    assert clear_history(client).status_code == 401
+
+
+def test_clear_history_rolls_back_trade_links_and_reports_on_failure(client, save, db_session, monkeypatch):
+    row = save(BONK)
+    report_id = row.id
+    open_trade(client, report_id=report_id)
+    def fail_commit():
+        raise RuntimeError("commit failed")
+    monkeypatch.setattr(db_session, "commit", fail_commit)
+    with pytest.raises(RuntimeError, match="commit failed"):
+        clear_history(client)
+    assert len(client.get("/memecoin/reports").json()) == 1
+    assert client.get("/memecoin/trades").json()[0]["report_id"] == report_id
+
+
+def test_remove_one_report_keeps_other_snapshots_and_journal_links(client, save, user):
+    first_id = save(BONK, minutes_ago=3).id
+    second_id = save(BONK, minutes_ago=1).id
+    first_trade = open_trade(client, report_id=first_id).json()["id"]
+    second_trade = open_trade(client, report_id=second_id).json()["id"]
+    user.id = 2
+    open_trade(client, report_id=first_id)
+    user.id = 1
+    analyzer._cache[("solana", BONK_MINT)] = (0, None)
+    response = client.delete(f"/memecoin/reports/{first_id}")
+    assert response.status_code == 204 and response.content == b""
+    assert [row["id"] for row in client.get("/memecoin/reports").json()] == [second_id]
+    assert client.get(f"/memecoin/reports/{first_id}").status_code == 404
+    trades = {row["id"]: row for row in client.get("/memecoin/trades").json()}
+    assert trades[first_trade]["report_id"] is None
+    assert trades[second_trade]["report_id"] == second_id
+    user.id = 2
+    assert client.get("/memecoin/trades").json()[0]["report_id"] is None
+    assert analyzer._cache == {}
+    assert client.delete(f"/memecoin/reports/{first_id}").status_code == 404
+
+
+def test_remove_report_denies_non_admin_and_invalid_ids(client, save, user):
+    report_id = save(BONK).id
+    user.id_adm_role = 2
+    assert client.delete(f"/memecoin/reports/{report_id}").status_code == 403
+    user.id_adm_role = 1
+    assert client.delete("/memecoin/reports/0").status_code == 422
+    assert client.delete("/memecoin/reports/not-an-id").status_code == 422
+    assert len(client.get("/memecoin/reports").json()) == 1
+
+
+def test_remove_report_requires_login(app, client, save):
+    from app.core.auth import get_current_user
+    report_id = save(BONK).id
+    del app.dependency_overrides[get_current_user]
+    assert client.delete(f"/memecoin/reports/{report_id}").status_code == 401
+
+
+def test_remove_report_rolls_back_on_failure(client, save, db_session, monkeypatch):
+    report_id = save(BONK).id
+    open_trade(client, report_id=report_id)
+    def fail_commit():
+        raise RuntimeError("commit failed")
+    monkeypatch.setattr(db_session, "commit", fail_commit)
+    with pytest.raises(RuntimeError, match="commit failed"):
+        client.delete(f"/memecoin/reports/{report_id}")
+    assert len(client.get("/memecoin/reports").json()) == 1
+    assert client.get("/memecoin/trades").json()[0]["report_id"] == report_id
+
+
 # --- Wallet lists --------------------------------------------------------------
 
 def test_add_list_and_delete_a_wallet(client):

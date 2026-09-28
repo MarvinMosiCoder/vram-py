@@ -4,19 +4,85 @@ keep wallet lists, keep a trade journal, and watch wallets for buys.
 search and analyze call DexScreener and RugCheck live; analyze saves each
 freshly fetched report. See docs/vram/memecoin.md for the behavior.
 """
+from datetime import datetime, timezone
+from typing import Literal
+
 import httpx
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app import schemas
-from app.core.auth import get_current_user
+from app.core.auth import get_current_user, require_role
 from app.core.database import get_db
 from app.helpers.memecoin import analyzer, dexscreener, storage, watch
 from app.helpers.memecoin.chains import ANY_ADDRESS, CHAINS, is_valid_address, normalize
 from app.schemas.admin.memecoin import ChainId, WalletList
 
 router = APIRouter(prefix="/memecoin", tags=["memecoin"])
+
+
+class MarketSnapshot(BaseModel):
+    market: schemas.MarketData | None
+    fetched_at: datetime
+
+
+class WalletToken(BaseModel):
+    address: str
+    name: str | None
+    symbol: str | None
+    market_cap: float | None
+    created_at: datetime | None
+    observed_at: datetime
+    source: Literal["Saved report", "RugCheck creator history"]
+    report_id: int | None
+
+
+class WalletTokens(BaseModel):
+    chain: ChainId
+    address: str
+    relationship: Literal["creator", "owner"]
+    tokens: list[WalletToken]
+    total: int
+    limit: int
+    offset: int
+    coverage: Literal["saved_reports"]
+
+
+@router.get("/wallet-tokens/{chain}/{address}", response_model=WalletTokens)
+def wallet_tokens(
+    chain: ChainId,
+    address: str = Path(pattern=ANY_ADDRESS),
+    relationship: Literal["creator", "owner"] = Query(default="creator"),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not is_valid_address(CHAINS[chain], address):
+        raise HTTPException(status_code=422, detail=f"Not a {CHAINS[chain].name} wallet address")
+    if chain == "solana" and relationship == "owner":
+        raise HTTPException(status_code=422, detail="Current-owner lookup is available for EVM chains only")
+    return storage.wallet_tokens(db, chain, address, relationship, limit, offset)
+
+
+@router.get("/market/{chain}/{address}", response_model=MarketSnapshot)
+async def market_snapshot(
+    chain: ChainId,
+    address: str = Path(pattern=ANY_ADDRESS),
+    current_user=Depends(get_current_user),
+):
+    """Refresh only market metrics, without saving a report or rerunning safety."""
+    if not is_valid_address(CHAINS[chain], address):
+        raise HTTPException(status_code=422, detail=f"Not a {CHAINS[chain].name} token address")
+    address = normalize(address)
+    async with httpx.AsyncClient() as client:
+        try:
+            pairs = await dexscreener.fetch_token_pairs(client, chain, address)
+        except httpx.HTTPError as error:
+            raise HTTPException(status_code=502, detail=f"Market refresh failed: {analyzer.describe(error)}") from error
+    return MarketSnapshot(market=dexscreener.token_market(pairs, address), fetched_at=datetime.now(timezone.utc))
 
 
 @router.get("/search", response_model=list[schemas.MarketData])
@@ -67,6 +133,25 @@ async def analyze(
 
 # --- Saved reports -------------------------------------------------------------
 
+class ClearHistoryRequest(BaseModel):
+    confirm: Literal["clear_all_reports"]
+
+
+class ClearHistoryResult(BaseModel):
+    deleted: int
+
+
+@router.delete("/reports", response_model=ClearHistoryResult)
+def clear_history(
+    confirmation: ClearHistoryRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(1)),
+):
+    """Administrator-only deletion of shared history, never journal entries."""
+    deleted = storage.clear_reports(db)
+    analyzer.clear_cache()
+    return ClearHistoryResult(deleted=deleted)
+
 @router.get("/reports", response_model=list[schemas.ReportSummary])
 def list_reports(
     address: str | None = Query(default=None, pattern=ANY_ADDRESS),
@@ -85,6 +170,18 @@ def get_report(report_id: int, db: Session = Depends(get_db), current_user=Depen
     if row is None:
         raise HTTPException(status_code=404, detail="Report not found")
     return row
+
+
+@router.delete("/reports/{report_id}", status_code=204)
+def delete_report(
+    report_id: int = Path(gt=0),
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(1)),
+):
+    if not storage.delete_report(db, report_id):
+        raise HTTPException(status_code=404, detail="Report not found")
+    analyzer.clear_cache()
+    return Response(status_code=204)
 
 
 # --- Wallet lists --------------------------------------------------------------

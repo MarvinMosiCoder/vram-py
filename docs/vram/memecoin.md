@@ -90,6 +90,79 @@ python -m app.helpers.memecoin.check <name or token address> --save
 
 ## Pages
 
+### Wallet copying and creator search
+
+Creator addresses on live/saved reports show the full selectable address, Copy,
+and View created coins. EVM current owners have separate Copy and View owned
+contracts controls; an owner is not assumed to be the deployer. Clipboard failures
+show a manual-copy message. The Wallet search tab opens `/memecoin/creators`;
+report links prefill the chain, address, and relationship and run the search.
+
+Authenticated `GET /memecoin/wallet-tokens/{chain}/{address}` accepts
+`relationship=creator|owner` (default creator), `limit` (1–100, default 50), and
+`offset` (default 0). Owner lookup is EVM-only. Invalid chain/address, relationship,
+or pagination returns 422. Search filters saved report JSON by the recorded
+creator or owner and chain, with case-insensitive EVM matching. Solana creator
+results also include the saved RugCheck `creator_tokens` lists. Mints are
+deduplicated, newest observation first, before pagination; all authenticated
+users see the shared report history, matching the existing history permissions.
+
+Results include recorded market cap, creation date where supplied, observation
+time, source, and links to analyze the token or read its saved report. Unknown
+names/dates/caps remain unknown. These are observed relationships, not a complete
+on-chain wallet index or wallet holdings: unseen wallets can return no records.
+Current-owner results mean ownership as recorded at observation time. The page
+states its coverage and does not interpret an empty result as no launches.
+Analyzing a known coin saves its available creator history for later searches.
+No new keys, schema changes, or external wallet-history calls are required.
+
+Owners: `WalletAddress.tsx`, `WalletSearch.tsx`, the creators route under
+`frontend-next/app/(admin)/memecoin/`, `storage.wallet_tokens`, and the endpoint
+in `backend/app/api/admin/memecoin.py`. Tests: `backend/tests/test_wallet_search.py`.
+
+### Quick scalp setup
+
+Live and saved reports include a separate Quick scalp setup panel. Default
+minimums are market cap $100,000, selected-pool liquidity $75,000, selected-pool
+volume $50,000/1h and $10,000/5m, 100 trades/5m, and a liquidity/market-cap ratio
+of 10%. The ratio uses selected-pool liquidity divided by market cap times 100;
+missing liquidity or missing/zero market cap makes it unknown, with no FDV
+fallback. Liquidity of $100,000 or more
+gets an additional depth label. Minimums are editable for the current view and
+reset on navigation; these experimental thresholds are not validated returns.
+Passing checks and the overall matching status use green badges with explicit
+text, independent of the role theme's accent color.
+The panel also requires accelerating volume: `m5 > (h1 - m5) / 11`. Pools under
+one hour old, missing volumes, or inconsistent overlapping windows have unknown
+momentum. It shows FDV and 5m/1h price changes separately; FDV never substitutes
+for missing market cap. Trade counts are transactions, not unique traders.
+
+All strategy metrics come from the deepest DexScreener pool selected by the
+existing collector, not sums across pools. `Avoid` blocks a match and `High risk`
+also prevents the positive label. Missing values remain unknown. This leaves
+the existing backend risk rules unchanged.
+
+Authenticated `GET /memecoin/market/{chain}/{address}` validates the chain/address,
+fetches DexScreener only, and returns `{market, fetched_at}`; no pairs gives null
+market, an upstream HTTP failure gives 502. It neither saves history nor reruns
+safety. The live panel calls it immediately and 30 seconds after each request
+settles, with a 15-second timeout, and cancels on unmount. Failed refreshes retain
+the previous values with an error and suppress a positive match. Market data
+older than 60 seconds or safety older than 5 minutes requires a refresh. Use
+Refresh full report to rerun the normal analysis (subject to its five-minute
+cache). Fetch time is not a guarantee of upstream market-data freshness.
+
+Saved reports show historical metrics without polling. Older saved payloads
+default new fields to null; the panel says insufficient data where appropriate.
+Market refreshes and custom thresholds are not saved to history or the journal.
+Fees, trade-size price impact, and wash-trading detection are not implemented.
+
+Owners: `ScalpPanel.tsx` and the pure filter helper `scalp.ts` under
+`frontend-next/components/memecoin/`, with new collector/schema fields and the
+market endpoint in the existing backend memecoin files. Filter tests run with
+`node --experimental-strip-types --test --test-isolation=none tests/scalp.test.mjs`
+from `frontend-next/`; collector and route tests are in `test_scalp_market.py`.
+
 `/memecoin` sits in the `(admin)` route group, so it gets the admin shell and
 login redirect. A sidebar link is a menu row added on `/menus` with path
 `memecoin` (no leading slash) and type `Route`. `page.tsx` is a server component
@@ -299,6 +372,37 @@ on port 8080, open `http://localhost:8080/docs`, and use Authorize with an admin
 email and password.
 
 ## Storage
+
+### Clear report history
+
+Each history row also has an administrator-only Remove button with an inline
+Confirm remove / Cancel prompt. `DELETE /memecoin/reports/{report_id}` removes
+only that snapshot, detaches only its journal links in the same transaction,
+and returns 204 (404 if already missing, 422 for a non-positive/invalid ID).
+It uses the same role-ID-1 restriction as Clear all history and clears the local
+analysis cache after success. Other snapshots of the same token are kept. The
+page retains its token filter and reloads the first page after the request,
+including after errors/timeouts; Cancel makes no request.
+
+The History page exposes Clear all history to administrator role ID 1, following
+the existing admin-only API role convention. Confirmation explicitly covers all
+users, chains, pages, and token filters. Cancel does not send a request.
+`DELETE /memecoin/reports` requires that role and JSON
+`{"confirm":"clear_all_reports"}`; missing/wrong confirmation returns 422,
+non-admin users receive 403, and unauthenticated requests receive 401.
+
+The transaction detaches every journal `report_id`, deletes saved reports, and
+commits once; failure rolls both operations back. It returns `{deleted: count}`
+and clears this worker's analysis cache after a successful commit. Trades,
+wallet lists, and watch alerts are kept. Wallet-search evidence stored only in
+deleted reports is lost. This is permanent, and new analyses (including requests
+already in flight) can save reports again; it does not disable history collection.
+Other server workers retain their own report caches.
+
+The UI blocks repeat deletes and filter changes during confirmation/deletion,
+ignores outdated list responses, and reloads history after success or failure
+because a timed-out write may have committed. History is not cleared just by
+adding this feature; only the explicit confirmation in the app sends the delete.
 
 Phase 6 added three tables, created by
 `alembic/versions/b33310bd5184_create_memecoin_tables.py`. The analyzer and the

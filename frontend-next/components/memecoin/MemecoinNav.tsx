@@ -10,6 +10,7 @@ const TABS = [
   { href: "/memecoin", label: "Search" },
   { href: "/memecoin/history", label: "History" },
   { href: "/memecoin/wallets", label: "Wallets" },
+  { href: "/memecoin/creators", label: "Wallet search" },
   { href: "/memecoin/journal", label: "Journal" },
   { href: "/memecoin/watch", label: "Watch" },
 ];

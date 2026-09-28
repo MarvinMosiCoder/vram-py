@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import api from "@/lib/http";
 import { errorMessage } from "@/lib/api-errors";
+import { useAuth } from "@/context/authContext";
 import TextInput from "@/components/form/TextInput";
 import PrimaryButton from "@/components/button/PrimaryButton";
 import SecondaryButton from "@/components/button/SecondaryButton";
@@ -23,6 +24,15 @@ async function fetchPage(address: string, offset: number): Promise<ReportSummary
 }
 
 export default function ReportHistory() {
+  const { user } = useAuth();
+  const canClear = user?.role_id === 1;
+  const [confirming, setConfirming] = useState(false);
+  const [confirmingId, setConfirmingId] = useState<number | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [clearError, setClearError] = useState("");
+  const [clearMessage, setClearMessage] = useState("");
+  const generation = useRef(0);
+  const clearLock = useRef(false);
   const [rows, setRows] = useState<ReportSummary[] | null>(null);
   const [error, setError] = useState("");
   // The address the list is filtered by; "" lists every coin.
@@ -32,17 +42,19 @@ export default function ReportHistory() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const actionPending = confirming || confirmingId !== null || clearing;
 
   useEffect(() => {
     let active = true;
+    const version = ++generation.current;
     fetchPage(filter, 0)
       .then((page) => {
-        if (!active) return;
+        if (!active || version !== generation.current) return;
         setRows(page);
         setHasMore(page.length === PAGE_SIZE);
       })
       .catch((err) => {
-        if (active) setError(errorMessage(err, "Could not load the history."));
+        if (active && version === generation.current) setError(errorMessage(err, "Could not load the history."));
       });
     return () => {
       active = false;
@@ -50,6 +62,8 @@ export default function ReportHistory() {
   }, [filter, attempt]);
 
   function reload(address: string) {
+    generation.current++;
+    setLoadingMore(false);
     setRows(null);
     setError("");
     if (address === filter) setAttempt((n) => n + 1);
@@ -74,16 +88,48 @@ export default function ReportHistory() {
   }
 
   async function loadMore() {
-    if (!rows) return;
+    if (!rows || clearLock.current) return;
+    const version = generation.current;
     setLoadingMore(true);
     try {
       const page = await fetchPage(filter, rows.length);
+      if (version !== generation.current) return;
       setRows([...rows, ...page]);
       setHasMore(page.length === PAGE_SIZE);
     } catch (err) {
-      setError(errorMessage(err, "Could not load more reports."));
+      if (version === generation.current) setError(errorMessage(err, "Could not load more reports."));
     } finally {
-      setLoadingMore(false);
+      if (version === generation.current) setLoadingMore(false);
+    }
+  }
+
+  async function clearHistory(reportId: number | null = null) {
+    if (clearLock.current) return;
+    clearLock.current = true;
+    generation.current++;
+    setClearing(true);
+    setLoadingMore(false);
+    setClearError("");
+    setClearMessage("");
+    try {
+      if (reportId !== null) {
+        await api.delete(`/memecoin/reports/${reportId}`, { timeout: 15000 });
+        setClearMessage(`Removed report #${reportId}. Journal entries were kept.`);
+      } else {
+        const { data } = await api.delete<{ deleted: number }>("/memecoin/reports", {
+          data: { confirm: "clear_all_reports" }, timeout: 15000,
+        });
+        setClearMessage(`Cleared ${data.deleted} saved ${data.deleted === 1 ? "report" : "reports"}. Journal entries were kept.`);
+      }
+      setConfirming(false);
+    } catch (err) {
+      setClearError(errorMessage(err, "Could not confirm whether history was cleared. Check the refreshed list before trying again."));
+    } finally {
+      // Refetch even after a timeout: the server may have committed the delete.
+      reload(filter);
+      setConfirmingId(null);
+      setClearing(false);
+      clearLock.current = false;
     }
   }
 
@@ -95,6 +141,7 @@ export default function ReportHistory() {
         </label>
         <div className="flex flex-col gap-2 sm:flex-row">
           <TextInput
+            disabled={actionPending}
             id="history-address"
             value={input}
             onChange={(event) => setInput(event.target.value)}
@@ -102,19 +149,38 @@ export default function ReportHistory() {
             autoComplete="off"
           />
           <div className="flex shrink-0 gap-2">
-            <PrimaryButton>Filter</PrimaryButton>
-            {filter && <SecondaryButton onClick={clearFilter}>Clear</SecondaryButton>}
+            <PrimaryButton disabled={actionPending}>Filter</PrimaryButton>
+            {filter && <SecondaryButton disabled={actionPending} onClick={clearFilter}>Clear filter</SecondaryButton>}
           </div>
         </div>
         {inputError && <p role="alert" className="m-0 text-[13px] text-skin-danger">{inputError}</p>}
         <p className="m-0 text-xs text-skin-dim">Every report the analyzer fetches is saved here, newest first.</p>
       </form>
 
+      {canClear && (
+        <Panel title="Clear history">
+          {confirming ? (
+            <>
+              <p className="m-0 text-sm text-skin-text">Permanently delete all saved reports for every user, across all coins and chains? This includes reports outside the current filter. This cannot be undone.</p>
+              <p className="text-xs text-skin-dim">Journal entries, wallet lists and alerts are kept. Journal links to deleted reports are removed. Wallet search loses the creator history stored in these reports. New analyses will save new reports.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <SecondaryButton disabled={clearing} onClick={() => clearHistory()} className="text-skin-danger">{clearing ? "Clearing…" : "Confirm clear all history"}</SecondaryButton>
+                <SecondaryButton disabled={clearing} onClick={() => setConfirming(false)}>Cancel</SecondaryButton>
+              </div>
+            </>
+          ) : (
+            <SecondaryButton disabled={actionPending} onClick={() => { setConfirming(true); setClearMessage(""); setClearError(""); }}>Clear all history</SecondaryButton>
+          )}
+          {clearError && <p role="alert" className="mb-0 text-sm text-skin-danger">{clearError}</p>}
+          {clearMessage && <p role="status" className="mb-0 text-sm text-skin-text">{clearMessage}</p>}
+        </Panel>
+      )}
+
       {error && (
         <Panel title="History unavailable">
           <p role="alert" className="m-0 text-sm text-skin-danger">{error}</p>
           <div className="mt-3">
-            <SecondaryButton onClick={() => reload(filter)}>Retry</SecondaryButton>
+            <SecondaryButton disabled={actionPending} onClick={() => reload(filter)}>Retry</SecondaryButton>
           </div>
         </Panel>
       )}
@@ -133,9 +199,10 @@ export default function ReportHistory() {
             <ul className="m-0 list-none divide-y divide-skin-border p-0">
               {rows.map((row) => (
                 <li key={row.id}>
+                  <div className="flex flex-col sm:flex-row sm:items-center">
                   <Link
                     href={`/memecoin/history/${row.id}`}
-                    className="flex flex-col gap-2 px-5 py-3 text-skin-text no-underline hover:bg-skin-border/40 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                    className="flex min-w-0 flex-1 flex-col gap-2 px-5 py-3 text-skin-text no-underline hover:bg-skin-border/40 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
                   >
                     <span className="min-w-0">
                       <span className="font-medium">{row.symbol ?? "?"}</span>{" "}
@@ -149,6 +216,21 @@ export default function ReportHistory() {
                       <span className="font-mono text-xs text-skin-dim">risk {row.score}/100</span>
                     </span>
                   </Link>
+                  {canClear && confirmingId !== row.id && (
+                    <div className="px-5 pb-3 sm:py-3 sm:pl-0">
+                      <SecondaryButton disabled={actionPending} aria-label={`Remove report ${row.id} for ${row.symbol ?? row.address}`} onClick={() => { setConfirmingId(row.id); setClearError(""); setClearMessage(""); }}>Remove</SecondaryButton>
+                    </div>
+                  )}
+                  </div>
+                  {canClear && confirmingId === row.id && (
+                    <div className="px-5 pb-4">
+                      <p className="mt-0 text-sm text-skin-text">Permanently remove report #{row.id} for {row.symbol ?? shortAddress(row.address)} from shared history? Only this snapshot is deleted. Linked journal entries are kept without their report link.</p>
+                      <div className="flex flex-wrap gap-2">
+                        <SecondaryButton disabled={clearing} className="text-skin-danger" onClick={() => clearHistory(row.id)}>{clearing ? "Removing…" : "Confirm remove"}</SecondaryButton>
+                        <SecondaryButton disabled={clearing} onClick={() => setConfirmingId(null)}>Cancel</SecondaryButton>
+                      </div>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -158,7 +240,7 @@ export default function ReportHistory() {
 
       {rows !== null && hasMore && (
         <div>
-          <SecondaryButton disabled={loadingMore} onClick={loadMore}>
+          <SecondaryButton disabled={loadingMore || actionPending} onClick={loadMore}>
             {loadingMore ? "Loading…" : "Load more"}
           </SecondaryButton>
         </div>

@@ -19,6 +19,14 @@ export type PoolData = {
   price_usd: number | null;
   liquidity_usd: number | null;
   volume_24h: number | null;
+  market_cap?: number | null;
+  fdv?: number | null;
+  volume_1h?: number | null;
+  volume_5m?: number | null;
+  buys_5m?: number | null;
+  sells_5m?: number | null;
+  price_change_5m?: number | null;
+  price_change_1h?: number | null;
   buys_24h: number | null;
   sells_24h: number | null;
   age_hours: number | null;

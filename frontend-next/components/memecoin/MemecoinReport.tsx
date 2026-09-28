@@ -84,9 +84,11 @@ export default function MemecoinReport({ chain, address }: { chain: string; addr
         </Panel>
       ) : (
         <ReportView
+          live
           report={report}
           actions={
             <>
+              <SecondaryButton onClick={retry}>Refresh full report</SecondaryButton>
               <Link
                 href={journalHref(report)}
                 className="rounded-md border border-skin-border px-3.5 py-1.75 text-[13px] font-medium text-skin-dim no-underline hover:bg-skin-border hover:text-skin-text"

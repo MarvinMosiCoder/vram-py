@@ -76,6 +76,86 @@ def get_report(db: Session, report_id: int) -> models.MemecoinReport | None:
     return db.get(models.MemecoinReport, report_id)
 
 
+def clear_reports(db: Session) -> int:
+    """Clear shared report history while preserving every user's journal.
+
+    Detach references explicitly so this also works without SQLite FK pragmas;
+    PostgreSQL's ON DELETE SET NULL remains a second line of protection.
+    Both changes commit together, or both roll back.
+    """
+    try:
+        db.query(models.MemecoinTrade).filter(models.MemecoinTrade.report_id.isnot(None)).update(
+            {models.MemecoinTrade.report_id: None}, synchronize_session=False,
+        )
+        deleted = db.query(models.MemecoinReport).delete(synchronize_session=False)
+        db.commit()
+        return deleted
+    except Exception:
+        db.rollback()
+        raise
+
+
+def delete_report(db: Session, report_id: int) -> bool:
+    """Delete one saved snapshot, detaching only its journal references."""
+    try:
+        row = db.get(models.MemecoinReport, report_id)
+        if row is None:
+            return False
+        db.query(models.MemecoinTrade).filter_by(report_id=report_id).update(
+            {models.MemecoinTrade.report_id: None}, synchronize_session=False,
+        )
+        db.delete(row)
+        db.commit()
+        return True
+    except Exception:
+        db.rollback()
+        raise
+
+
+def wallet_tokens(db: Session, chain: str, address: str, relationship: str, limit: int, offset: int) -> dict:
+    """Observed relationships, not an exhaustive chain index or wallet holdings.
+
+    Filter JSON in SQL before reading payloads. Newest observations win when
+    snapshots repeat a mint. Owner matches never inherit creator launch history.
+    """
+    address = normalize(address)
+    wallet_field = models.MemecoinReport.report["safety"][relationship].as_string()
+    if chain != "solana":
+        from sqlalchemy import func
+        wallet_field = func.lower(wallet_field)
+    rows = (
+        db.query(models.MemecoinReport)
+        .filter(models.MemecoinReport.chain == chain, wallet_field == address)
+        .order_by(models.MemecoinReport.checked_at.desc(), models.MemecoinReport.id.desc())
+        .yield_per(100)
+    )
+    tokens = {}
+    for row in rows:
+        report = row.report
+        market = report.get("market") or {}
+        tokens.setdefault(normalize(row.address), {
+            "address": normalize(row.address), "name": row.name, "symbol": row.symbol,
+            "market_cap": market.get("market_cap"), "created_at": None,
+            "observed_at": row.checked_at.replace(tzinfo=timezone.utc),
+            "source": "Saved report", "report_id": row.id,
+        })
+        if relationship == "creator" and chain == "solana":
+            for token in (report.get("safety") or {}).get("creator_tokens") or []:
+                mint = token.get("mint")
+                if not mint:
+                    continue
+                tokens.setdefault(mint, {
+                    "address": mint, "name": None, "symbol": None,
+                    "market_cap": token.get("market_cap"), "created_at": token.get("created_at"),
+                    "observed_at": row.checked_at.replace(tzinfo=timezone.utc),
+                    "source": "RugCheck creator history", "report_id": None,
+                })
+    values = list(tokens.values())
+    return {"chain": chain, "address": address, "relationship": relationship,
+            "tokens": values[offset:offset + limit], "total": len(values),
+            "limit": limit, "offset": offset, "coverage": "saved_reports"}
+
+
 # --- Wallet lists --------------------------------------------------------------
 
 def blacklist(db: Session) -> frozenset[str]:

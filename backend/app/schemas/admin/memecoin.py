@@ -27,6 +27,14 @@ class PoolData(BaseModel):
     price_usd: float | None = None
     liquidity_usd: float | None = None
     volume_24h: float | None = None
+    market_cap: float | None = None
+    fdv: float | None = None
+    volume_1h: float | None = None
+    volume_5m: float | None = None
+    buys_5m: int | None = None
+    sells_5m: int | None = None
+    price_change_5m: float | None = None
+    price_change_1h: float | None = None
     buys_24h: int | None = None
     sells_24h: int | None = None
     age_hours: float | None = None

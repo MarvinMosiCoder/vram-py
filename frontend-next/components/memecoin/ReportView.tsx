@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import ScalpPanel from "./ScalpPanel";
+import WalletAddress from "./WalletAddress";
 import type { CoinReport, CreatorToken, Finding, SafetyData, Verdict, WebData } from "@/types/memecoin";
 import { CHAINS, chainById, explorerUrl } from "./chains";
 import { age, count, date, liquidity, pct, price, shortAddress, usd, yesNo } from "./format";
@@ -30,7 +32,7 @@ export function VerdictBadge({ verdict }: { verdict: Verdict }) {
 
 // A live report and a saved one render the same way. `actions` adds buttons or
 // links under the header; `note` adds a line above them.
-export default function ReportView({ report, actions, note }: { report: CoinReport; actions?: ReactNode; note?: ReactNode }) {
+export default function ReportView({ report, actions, note, live = false }: { report: CoinReport; actions?: ReactNode; note?: ReactNode; live?: boolean }) {
   const { market, safety, web, assessment, errors } = report;
   const symbol = market?.symbol ?? safety?.symbol ?? null;
   const name = market?.name ?? safety?.name ?? null;
@@ -78,6 +80,8 @@ export default function ReportView({ report, actions, note }: { report: CoinRepo
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </section>
+
+      <ScalpPanel key={`${report.chain}:${report.address}:${report.checked_at}`} report={report} live={live} />
 
       <Panel title="Red flags">
         {assessment.findings.length === 0 ? (
@@ -130,7 +134,7 @@ export default function ReportView({ report, actions, note }: { report: CoinRepo
         {safety ? (
           <>
             {evm ? (
-              <EvmFacts safety={safety} />
+              <EvmFacts safety={safety} chain={report.chain} />
             ) : (
             <Facts>
               <Fact label="Mint authority">{authority(safety.mint_authority)}</Fact>
@@ -146,7 +150,7 @@ export default function ReportView({ report, actions, note }: { report: CoinRepo
               <Fact label="Launchpad">{safety.launchpad ?? "-"}</Fact>
               <Fact label="Rugged">{yesNo(safety.rugged)}</Fact>
               <Fact label="RugCheck score">{count(safety.rugcheck_score)} / 100</Fact>
-              <Fact label="Creator">{safety.creator ? shortAddress(safety.creator) : "?"}</Fact>
+              <Fact label="Creator">{safety.creator ? <WalletAddress address={safety.creator} chain={report.chain} /> : "?"}</Fact>
               <Fact label="Linked wallets">
                 {pct(safety.linked_wallets_pct)} in {safety.insider_networks.length} {safety.insider_networks.length === 1 ? "group" : "groups"}
               </Fact>
@@ -278,7 +282,7 @@ function flagText(value: boolean | null, yes: string, no: string): string {
   return value === null ? "?" : value ? yes : no;
 }
 
-function EvmFacts({ safety }: { safety: SafetyData }) {
+function EvmFacts({ safety, chain }: { safety: SafetyData; chain: CoinReport["chain"] }) {
   const owner = safety.owner_renounced ? "Renounced" : safety.owner ? shortAddress(safety.owner) : "?";
   return (
     <Facts>
@@ -287,7 +291,7 @@ function EvmFacts({ safety }: { safety: SafetyData }) {
         {pct(safety.buy_tax_pct)} / {pct(safety.sell_tax_pct)}
       </Fact>
       <Fact label="Source verified">{flagText(safety.open_source, "Yes", "No")}</Fact>
-      <Fact label="Owner">{owner}</Fact>
+      <Fact label="Owner">{safety.owner && !safety.owner_renounced ? <WalletAddress address={safety.owner} chain={chain} relationship="owner" /> : owner}</Fact>
       <Fact label="Owner can mint">{flagText(safety.owner_can_mint, "Yes", "No")}</Fact>
       <Fact label="Owner can change balances">{flagText(safety.owner_can_change_balances, "Yes", "No")}</Fact>
       <Fact label="Can pause transfers">{flagText(safety.transfers_pausable, "Yes", "No")}</Fact>
@@ -299,7 +303,7 @@ function EvmFacts({ safety }: { safety: SafetyData }) {
       <Fact label="Holders">{count(safety.total_holders)}</Fact>
       <Fact label="Top 10 hold">{pct(safety.top10_pct)}</Fact>
       <Fact label="Creator holds">{pct(safety.creator_pct)}</Fact>
-      <Fact label="Creator">{safety.creator ? shortAddress(safety.creator) : "?"}</Fact>
+      <Fact label="Creator">{safety.creator ? <WalletAddress address={safety.creator} chain={chain} /> : "?"}</Fact>
     </Facts>
   );
 }
@@ -352,7 +356,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex justify-between gap-4 border-b border-skin-border py-1.5 text-sm">
       <dt className="text-skin-dim">{label}</dt>
-      <dd className="m-0 text-right font-mono text-skin-text">{children}</dd>
+      <dd className="m-0 min-w-0 text-right font-mono text-skin-text">{children}</dd>
     </div>
   );
 }
